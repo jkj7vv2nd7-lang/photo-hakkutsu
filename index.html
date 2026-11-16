@@ -81,7 +81,19 @@ h2{font-size:1.18rem;margin:0 0 8px}
 #err-list{color:#ff9c9c;font-size:.86rem;margin-top:10px;line-height:1.7}
 .foot{font-size:.74rem;color:#6d6d74;text-align:center;margin-top:22px;line-height:1.8}
 .kbd-hint{font-size:.78rem;color:var(--dim);text-align:center;margin-top:8px}
-select,input[type=text]{font-size:1rem}
+select,input[type=text],input[type=password]{font-size:1rem}
+.ai-bar{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.ai-bar .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ai-bar .st{font-size:.9rem;color:var(--ink)}
+.field{margin-top:12px}
+.field label{display:block;font-size:.88rem;color:var(--dim);margin-bottom:4px}
+.field input,.field select{width:100%;min-height:50px;border-radius:10px;border:1px solid var(--line);background:#101116;color:var(--ink);padding:8px 10px}
+.album{margin-top:16px}
+.album h3{font-size:1.02rem;margin:0 0 6px}
+.search-row{display:flex;gap:8px;margin-top:4px}
+.search-row input{flex:1;min-height:52px;border-radius:10px;border:1px solid var(--line);background:#101116;color:var(--ink);padding:8px 10px;min-width:0}
+.search-row button{min-height:52px;padding:0 18px;border-radius:10px;border:1px solid var(--amber);background:linear-gradient(180deg,#5a451a,#42320f);color:#fff;font-weight:700;cursor:pointer}
+.ai-face{font-size:.72rem;color:#ffd98a}
 .help{background:rgba(232,163,58,.09);border-left:4px solid var(--amber);border-radius:0 10px 10px 0;padding:10px 12px;font-size:.93rem;line-height:1.75;margin:0 0 12px}
 #guide3{background:linear-gradient(180deg,#2c2410,#241d0b);border:1px solid var(--amber);border-radius:14px;padding:14px;margin-bottom:14px}
 #guide3 h3{margin:0 0 6px;font-size:1.05rem;color:#ffd98a}
@@ -111,6 +123,7 @@ select,input[type=text]{font-size:1rem}
     <button type="button" class="big-btn" id="btn-pick">写真を選ぶ</button>
     <button type="button" class="ghost-btn" id="btn-folder">フォルダごと選ぶ（パソコン向け）</button>
     <button type="button" class="ghost-btn" id="btn-demo">デモデータで試す（写真なしで操作を体験）</button>
+    <button type="button" class="ghost-btn" id="btn-ai-open">AI連携の設定（任意・初期オフ）</button>
     <input type="file" id="file-pick" accept="image/*" multiple hidden>
     <input type="file" id="file-folder" webkitdirectory hidden>
     <div class="counts" id="lib-counts" hidden>
@@ -148,9 +161,23 @@ select,input[type=text]{font-size:1rem}
       <button type="button" class="ghost-btn" id="btn-guide-close" style="margin-top:8px">分かった（この案内を閉じる）</button>
     </div>
     <button type="button" class="ghost-btn" id="btn-guide-open" hidden style="margin:0 0 12px">整理のしかたをもう一度見る</button>
+    <div class="ai-bar" id="ai-bar">
+      <div class="row">
+        <span class="st" id="ai-status">AI連携：オフ（ピントと明るさの画質スコアで整理しています）</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="ghost-btn" id="btn-ai-run" style="flex:1;margin-top:0" hidden>AIで解析する（感情・表情・構図）</button>
+        <button type="button" class="ghost-btn" id="btn-ai-settings2" style="flex:1;margin-top:0">AI設定を開く</button>
+      </div>
+      <div class="progress-wrap" id="ai-prog-wrap" hidden>
+        <div class="progress-bar"><i id="ai-prog-fill"></i></div>
+        <div id="ai-prog-text" style="font-size:.9rem;margin-top:6px;text-align:center"></div>
+      </div>
+    </div>
     <div class="tabs">
       <button type="button" id="tab-groups" class="on">類似グループ</button>
       <button type="button" id="tab-swipe">1枚ずつ仕分け</button>
+      <button type="button" id="tab-albums">発掘アルバム</button>
       <button type="button" id="tab-all">すべての写真</button>
     </div>
     <div id="view-groups">
@@ -166,6 +193,15 @@ select,input[type=text]{font-size:1rem}
       </div>
       <p class="kbd-hint">カードを左右にスワイプしても仕分けできます。パソコンでは ←（削除候補）／→（残す）キーも使えます。</p>
       <p class="note" id="swipe-left" style="text-align:center"></p>
+    </div>
+    <div id="view-albums" hidden>
+      <p class="help">眠っていた写真の発掘場所です。AI解析をすると、雰囲気や表情で分けた自動アルバムがここにできます。探したい言葉（例：夕暮れの切ない感じ、猫の寝顔）でも検索できます。</p>
+      <div class="search-row">
+        <input type="text" id="mood-q" placeholder="探したい言葉（例：猫の寝顔）">
+        <button type="button" id="btn-mood">探す</button>
+      </div>
+      <div id="mood-results"></div>
+      <div id="albums-list"></div>
     </div>
     <div id="view-all" hidden>
       <p class="help">読み込んだすべての写真の一覧です。写真を押すと「👑 残す／🗑️ 削除候補」の印が切り替わります。</p>
@@ -189,7 +225,48 @@ select,input[type=text]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
   </section>
 
-  <p class="foot">写真は端末の中でだけ処理します。AI連携（任意・初期オフ）は第2期で入ります。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。</p>
+  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。</p>
+</div>
+
+<!-- AI設定モーダル -->
+<div class="modal" id="ai-modal">
+  <div class="box">
+    <h2 style="margin-bottom:4px">AI連携の設定（任意）</h2>
+    <p class="note">AIを使うと、写真の雰囲気・タグ、表情（笑顔・半目）、構図を含む総合スコアが付けられ、自動アルバムとムード検索ができるようになります。使わない場合も、ピントと明るさの判定で整理はすべて動きます。<br>APIキーはこの端末の中にだけ保存され、写真は解析用の小さな画像だけが、選んだAIサービスへ送られます。</p>
+    <div class="field">
+      <label>AIモード</label>
+      <select id="ai-enabled">
+        <option value="0">オフ（ローカル解析だけ）</option>
+        <option value="1">オン（AI解析を使う）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>接続先</label>
+      <select id="ai-provider">
+        <option value="gemini">Google Gemini</option>
+        <option value="openai">OpenAI</option>
+        <option value="claude">Anthropic Claude</option>
+        <option value="compat">OpenAI互換サービス</option>
+        <option value="ollama">Ollama（自分のパソコン・キー不要）</option>
+      </select>
+    </div>
+    <div class="field" id="fld-key">
+      <label>APIキー</label>
+      <input type="password" id="ai-key" autocomplete="off" placeholder="キーを貼り付け">
+    </div>
+    <div class="field">
+      <label>モデル名</label>
+      <input type="text" id="ai-model" autocomplete="off">
+    </div>
+    <div class="field" id="fld-base" hidden>
+      <label>ベースURL</label>
+      <input type="text" id="ai-base" autocomplete="off" placeholder="https://…">
+    </div>
+    <p class="note" id="ai-note"></p>
+    <button type="button" class="big-btn" id="btn-ai-test">接続テスト（小さな画像で確認）</button>
+    <p class="note" id="ai-test-result" style="margin-top:8px"></p>
+    <button type="button" class="ghost-btn" id="btn-ai-close">閉じる</button>
+  </div>
 </div>
 
 <!-- 比較モーダル -->
@@ -209,6 +286,7 @@ select,input[type=text]{font-size:1rem}
 const $ = id => document.getElementById(id);
 const state = { records: [], groups: new Map(), cancel: false, busy: false };
 const effVerdict = r => r.verdict || r.suggest || "keep";
+const effScore = r => (r.ai && typeof r.ai.total === "number") ? r.ai.total : r.score;
 const isDemoId = id => String(id).startsWith("demo-");
 
 const DB = {
@@ -390,9 +468,9 @@ function regroup() {
       g++;
       const gid = "g" + g;
       let best = arr[0];
-      for (const r of arr) { r.groupId = gid; if (r.score > best.score) best = r; }
+      for (const r of arr) { r.groupId = gid; if (effScore(r) > effScore(best)) best = r; }
       for (const r of arr) r.suggest = r === best ? "keep" : "drop";
-      state.groups.set(gid, arr.slice().sort((a, b) => b.score - a.score));
+      state.groups.set(gid, arr.slice().sort((a, b) => effScore(b) - effScore(a)));
     } else {
       arr[0].groupId = null;
       arr[0].suggest = "keep";
@@ -498,7 +576,7 @@ function tileEl(rec, opts) {
   b.dataset.id = rec.id;
   const img = document.createElement("img");
   img.src = thumbUrl(rec); img.alt = rec.name; img.loading = "lazy";
-  const sc = document.createElement("span"); sc.className = "sc"; sc.textContent = "画質 " + rec.score;
+  const sc = document.createElement("span"); sc.className = "sc"; sc.textContent = rec.ai ? "AI " + rec.ai.total : "画質 " + rec.score;
   const bdg = document.createElement("span"); bdg.className = "bdg";
   bdg.textContent = effVerdict(rec) === "keep" ? "👑 残す" : "🗑️ 候補";
   const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = rec.name;
@@ -547,6 +625,7 @@ function renderChecklist() {
 }
 function renderAll() {
   renderGroups(); renderGridAll(); renderChecklist(); renderSwipe();
+  if (window.__phAi) window.__phAi.renderAlbums();
 }
 function renderGridAll() {
   const grid = $("grid-all");
@@ -581,7 +660,7 @@ function drawCmp() {
     const img = document.createElement("img");
     img.src = thumbUrl(r);
     const cap = document.createElement("figcaption");
-    cap.textContent = r.name + " ・ 画質 " + r.score + "（ピント " + r.sharp + "／露出 " + r.expo + "）";
+    cap.textContent = r.name + " ・ 画質 " + r.score + "（ピント " + r.sharp + "／露出 " + r.expo + "）" + (r.ai ? " ・ AI総合 " + r.ai.total + "（表情：" + r.ai.face + "／構図 " + r.ai.comp + "）タグ：" + (r.ai.tags || []).join("、") : "");
     const btn = document.createElement("button");
     btn.type = "button"; btn.className = "ghost-btn";
     btn.textContent = effVerdict(r) === "keep" ? "いま：👑 残す（押すと候補に）" : "いま：🗑️ 削除候補（押すと残すに）";
@@ -613,7 +692,7 @@ function renderSwipe() {
   const img = document.createElement("img"); img.src = thumbUrl(r); img.alt = r.name; img.draggable = false;
   const meta = document.createElement("div");
   meta.className = "note"; meta.style.marginTop = "8px";
-  meta.textContent = r.name + " ・ " + fmtDate(r.ts) + " ・ 画質スコア " + r.score + "（ピント " + r.sharp + "／露出 " + r.expo + "）" + (r.groupId ? " ・ 類似グループあり" : "");
+  meta.textContent = r.name + " ・ " + fmtDate(r.ts) + " ・ 画質スコア " + r.score + "（ピント " + r.sharp + "／露出 " + r.expo + "）" + (r.ai ? " ・ AI総合 " + r.ai.total + "（" + r.ai.face + "／" + r.ai.mood + "）" : "") + (r.groupId ? " ・ 類似グループあり" : "");
   card.appendChild(img); card.appendChild(meta);
   $("swipe-left").textContent = "あと " + (swipeQueue.length - swipeIx) + " 枚（未判定）";
 }
@@ -724,14 +803,16 @@ async function loadDemo() {
 
 /* ---- 画面遷移とイベント ---- */
 function setTab(which) {
-  for (const t of ["groups", "swipe", "all"]) {
+  for (const t of ["groups", "swipe", "albums", "all"]) {
     $("tab-" + t).classList.toggle("on", t === which);
     $("view-" + t).hidden = t !== which;
   }
   if (which === "swipe") renderSwipe();
+  if (which === "albums" && window.__phAi) window.__phAi.renderAlbums();
 }
 $("tab-groups").addEventListener("click", () => setTab("groups"));
 $("tab-swipe").addEventListener("click", () => setTab("swipe"));
+$("tab-albums").addEventListener("click", () => setTab("albums"));
 $("tab-all").addEventListener("click", () => setTab("all"));
 $("btn-sw-keep").addEventListener("click", () => swipeJudge("keep"));
 $("btn-sw-drop").addEventListener("click", () => swipeJudge("drop"));
@@ -775,6 +856,302 @@ document.addEventListener("drop", e => e.preventDefault());
 
 /* テスト用フック */
 window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist };
+</script>
+<script>
+"use strict";
+/* ================= AI連携（第2期）：接続先切替・解析・発掘アルバム ================= */
+const AI_KEY = "ph-ai-v1";
+const AI_DEFAULTS = {
+  gemini: { model: "gemini-3.6-flash", base: "" },
+  openai: { model: "gpt-4o-mini", base: "" },
+  claude: { model: "claude-sonnet-4-5", base: "" },
+  compat: { model: "", base: "" },
+  ollama: { model: "qwen3-vl:8b", base: "http://localhost:11434" },
+};
+const AI_NOTES = {
+  gemini: "Google AI Studioで取得したキーを貼ってください。無料枠でも使えます。",
+  openai: "OpenAIのAPIキーを貼ってください。画像を見られるモデルを選んでください。",
+  claude: "AnthropicのAPIキーを貼ってください。画像を見られるモデルを選んでください。",
+  compat: "OpenAI互換サービスのベースURLとキー、モデル名を入れてください。",
+  ollama: "自分のパソコンでOllamaが動いているとき向けです（キー不要）。画像対応モデル（Qwen-VLやLLaVA系）を選んでください。iPhoneから自宅パソコンのOllamaへは通常つながりません。",
+};
+function aiLoad() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(AI_KEY) || "null"); } catch (e) {}
+  if (!s || typeof s !== "object") s = {};
+  if (!s.providers) s.providers = {};
+  for (const p of Object.keys(AI_DEFAULTS)) {
+    if (!s.providers[p]) s.providers[p] = { key: "", model: AI_DEFAULTS[p].model, base: AI_DEFAULTS[p].base };
+    if (s.providers[p].model === undefined) s.providers[p].model = AI_DEFAULTS[p].model;
+    if (s.providers[p].base === undefined) s.providers[p].base = AI_DEFAULTS[p].base;
+    if (s.providers[p].key === undefined) s.providers[p].key = "";
+  }
+  if (s.enabled === undefined) s.enabled = false;
+  if (!AI_DEFAULTS[s.provider]) s.provider = "gemini";
+  return s;
+}
+let aiSet = aiLoad();
+function aiSave() { localStorage.setItem(AI_KEY, JSON.stringify(aiSet)); }
+const aiCfg = () => aiSet.providers[aiSet.provider];
+const aiReady = () => aiSet.enabled && (aiSet.provider === "ollama" || (aiCfg().key || "").trim().length > 0) && (aiCfg().model || "").trim().length > 0;
+
+const AI_PROMPT = [
+  "あなたは写真整理のアシスタントです。送られた写真（番号は0から）を1枚ずつ見て、次のJSONだけを返してください。説明文は書かないでください。",
+  '{"results":[{"i":0,"tags":["日本語のタグを最大5つ"],"mood":"雰囲気を短い日本語で（例：静かで切ない、明るく楽しい）","face":"笑顔|半目|目つぶり|人物なし|その他","comp":0,"total":0}]}',
+  "compは構図の良さ、totalはピント・表情・構図・空気感を合わせた総合スコア（どちらも0〜100の整数）。人物の半目・目つぶりはtotalを大きく下げてください。resultsは送った写真の枚数ぶん、iの順に並べてください。",
+].join("\n");
+
+function blobToB64(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(",")[1] || "");
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+}
+async function fetchJson(url, opts, timeoutMs) {
+  const ctl = new AbortController();
+  const to = setTimeout(() => ctl.abort(), timeoutMs || 90000);
+  try {
+    const r = await fetch(url, Object.assign({}, opts, { signal: ctl.signal }));
+    const text = await r.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch (e) {}
+    if (!r.ok) throw new Error("HTTP " + r.status + (json && json.error && json.error.message ? "：" + json.error.message : ""));
+    return json;
+  } finally { clearTimeout(to); }
+}
+function extractJson(text) {
+  if (!text) throw new Error("AIの返答が空でした");
+  const m = String(text).match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("AIの返答を読み取れませんでした");
+  return JSON.parse(m[0]);
+}
+/* 画像バッチを送り、results配列を返す */
+async function aiAnalyzeBatch(blobs) {
+  const p = aiSet.provider, cfg = aiCfg();
+  const model = (cfg.model || "").trim();
+  const b64s = [];
+  for (const b of blobs) b64s.push(await blobToB64(b));
+  if (p === "gemini") {
+    const parts = [{ text: AI_PROMPT }];
+    for (const b of b64s) parts.push({ inline_data: { mime_type: "image/jpeg", data: b } });
+    const j = await fetchJson("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(cfg.key.trim()), {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.2 } }),
+    });
+    const text = j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts.map(x => x.text || "").join("");
+    return extractJson(text).results || [];
+  }
+  if (p === "claude") {
+    const content = [{ type: "text", text: AI_PROMPT }];
+    for (const b of b64s) content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b } });
+    const j = await fetchJson("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": cfg.key.trim(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model, max_tokens: 3000, messages: [{ role: "user", content }] }),
+    });
+    const text = (j.content || []).map(x => x.text || "").join("");
+    return extractJson(text).results || [];
+  }
+  if (p === "ollama") {
+    const base = (cfg.base || "http://localhost:11434").replace(/\/+$/, "");
+    const j = await fetchJson(base + "/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, stream: false, format: "json", messages: [{ role: "user", content: AI_PROMPT, images: b64s }] }),
+    }, 180000);
+    return extractJson(j.message && j.message.content).results || [];
+  }
+  /* openai / compat */
+  const base = p === "compat" ? (cfg.base || "").replace(/\/+$/, "") : "https://api.openai.com/v1";
+  if (!base) throw new Error("ベースURLが未設定です");
+  const content = [{ type: "text", text: AI_PROMPT }];
+  for (const b of b64s) content.push({ type: "image_url", image_url: { url: "data:image/jpeg;base64," + b } });
+  const j = await fetchJson(base + "/chat/completions", {
+    method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key.trim() },
+    body: JSON.stringify({ model, messages: [{ role: "user", content }], response_format: { type: "json_object" }, temperature: 0.2 }),
+  });
+  const text = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  return extractJson(text).results || [];
+}
+/* 接続テスト：小さな画像1枚で視覚経路まで確認 */
+async function aiTest() {
+  const c = mkCanvas(64, 64), x = c.getContext("2d");
+  x.fillStyle = "#e5484d"; x.fillRect(0, 0, 64, 64);
+  const blob = await new Promise(res => c.toBlob(res, "image/jpeg", 0.9));
+  const results = await aiAnalyzeBatch([blob]);
+  if (!results.length) throw new Error("返答に結果がありませんでした");
+  return results[0];
+}
+
+/* ---- AI解析の実行（未解析だけ・途中再開可） ---- */
+let aiRunning = false, aiStop = false;
+async function runAi() {
+  if (aiRunning) { aiStop = true; return; }
+  if (!aiReady()) { openAiSettings(); return; }
+  const targets = state.records.filter(r => !r.ai);
+  if (!targets.length) return;
+  aiRunning = true; aiStop = false;
+  $("btn-ai-run").textContent = "AI解析を止める";
+  $("ai-prog-wrap").hidden = false;
+  const BATCH = 6;
+  let done = 0, quotaHit = false;
+  for (let s = 0; s < targets.length; s += BATCH) {
+    if (aiStop) break;
+    const chunk = targets.slice(s, s + BATCH);
+    try {
+      const results = await aiAnalyzeBatch(chunk.map(r => r.thumb));
+      for (const res of results) {
+        const rec = chunk[res.i];
+        if (!rec) continue;
+        rec.ai = {
+          tags: Array.isArray(res.tags) ? res.tags.slice(0, 5).map(String) : [],
+          mood: String(res.mood || ""), face: String(res.face || "その他"),
+          comp: Math.max(0, Math.min(100, Math.round(Number(res.comp) || 0))),
+          total: Math.max(0, Math.min(100, Math.round(Number(res.total) || 0))),
+          provider: aiSet.provider, model: aiCfg().model, at: Date.now(),
+        };
+        await DB.put(rec);
+      }
+    } catch (e) {
+      if (/429|quota|RESOURCE_EXHAUSTED/i.test(e.message)) { quotaHit = true; }
+      $("ai-prog-text").textContent = "エラーで止まりました：" + e.message + "（解析済みは保存されています）";
+      break;
+    }
+    done += chunk.length;
+    $("ai-prog-fill").style.width = Math.round(done / targets.length * 100) + "%";
+    $("ai-prog-text").textContent = "AI解析中 " + Math.min(done, targets.length) + " / " + targets.length + " 枚";
+    regroup(); refreshCounts(); renderAll();
+  }
+  if (quotaHit) $("ai-prog-text").textContent = "AIの上限に達したようです。途中まで保存しました。時間をおいて、続きから再開できます。";
+  aiRunning = false;
+  $("btn-ai-run").textContent = "AIで解析する（感情・表情・構図）";
+  regroup(); refreshCounts(); renderAll(); renderAiBar();
+}
+
+/* ---- AIバーと設定画面 ---- */
+function renderAiBar() {
+  const total = state.records.length;
+  const withAi = state.records.filter(r => r.ai).length;
+  const st = $("ai-status");
+  if (!aiSet.enabled) st.textContent = "AI連携：オフ（ピントと明るさの画質スコアで整理しています）";
+  else if (!aiReady()) st.textContent = "AI連携：オン（キーまたはモデル名が未設定です。設定を開いてください）";
+  else st.textContent = "AI連携：オン（" + aiSet.provider + "／" + aiCfg().model + "）・AI解析済み " + withAi + " / " + total + " 枚";
+  $("btn-ai-run").hidden = !(aiSet.enabled && total > 0 && withAi < total);
+}
+function fillAiForm() {
+  $("ai-enabled").value = aiSet.enabled ? "1" : "0";
+  $("ai-provider").value = aiSet.provider;
+  const cfg = aiCfg();
+  $("ai-key").value = cfg.key || "";
+  $("ai-model").value = cfg.model || "";
+  $("ai-base").value = cfg.base || "";
+  $("fld-key").hidden = aiSet.provider === "ollama";
+  $("fld-base").hidden = !(aiSet.provider === "compat" || aiSet.provider === "ollama");
+  $("ai-note").textContent = AI_NOTES[aiSet.provider] || "";
+}
+function readAiForm() {
+  aiSet.enabled = $("ai-enabled").value === "1";
+  const cfg = aiCfg();
+  cfg.key = $("ai-key").value;
+  cfg.model = $("ai-model").value;
+  cfg.base = $("ai-base").value;
+  aiSave();
+}
+function openAiSettings() { fillAiForm(); $("ai-modal").classList.add("open"); }
+$("btn-ai-open").addEventListener("click", openAiSettings);
+$("btn-ai-settings2").addEventListener("click", openAiSettings);
+$("btn-ai-close").addEventListener("click", () => { readAiForm(); $("ai-modal").classList.remove("open"); renderAiBar(); renderAll(); });
+$("ai-provider").addEventListener("change", () => { readAiForm(); aiSet.provider = $("ai-provider").value; aiSave(); fillAiForm(); });
+for (const id of ["ai-enabled", "ai-key", "ai-model", "ai-base"]) $(id).addEventListener("change", readAiForm);
+$("btn-ai-test").addEventListener("click", async () => {
+  readAiForm();
+  const out = $("ai-test-result");
+  out.textContent = "テスト中…（小さな画像を送って確認しています）";
+  try {
+    const r = await aiTest();
+    out.textContent = "接続テストOK：画像を見て答えられました（総合 " + (r.total ?? "?") + "／雰囲気：" + (r.mood || "?") + "）。この接続先でAI解析が使えます。";
+  } catch (e) {
+    out.textContent = "接続テストでエラー：" + e.message + "（キー・モデル名・画像対応モデルかを確認してください）";
+  }
+  renderAiBar();
+});
+$("btn-ai-run").addEventListener("click", runAi);
+
+/* ---- 発掘アルバムとムード検索 ---- */
+const ALBUM_DEFS = [
+  { id: "smile", title: "😊 最高の笑顔・ハッピーな瞬間", test: r => r.ai && r.ai.face === "笑顔" },
+  { id: "calm", title: "🌿 静かで落ち着いた風景・癒やし", test: r => r.ai && /静か|落ち着|癒|穏やか|のんびり|切な|自然|花|風景|庭/.test((r.ai.mood || "") + " " + (r.ai.tags || []).join(" ")) },
+  { id: "dynamic", title: "⚡ 躍動感・ドラマチックな瞬間", test: r => r.ai && /躍動|ドラマチック|劇的|動き|ダイナミック|夕|光と影|鮮やか/.test((r.ai.mood || "") + " " + (r.ai.tags || []).join(" ")) },
+  { id: "best", title: "✨ SNS・フォトブック即戦力（AI総合85点以上）", test: r => r.ai && r.ai.total >= 85 },
+];
+function albumSection(title, recs) {
+  const div = document.createElement("div");
+  div.className = "album";
+  const h = document.createElement("h3");
+  h.textContent = title + "（" + recs.length + "枚）";
+  div.appendChild(h);
+  if (!recs.length) {
+    const p = document.createElement("p");
+    p.className = "note"; p.textContent = "まだ該当する写真がありません。";
+    div.appendChild(p);
+    return div;
+  }
+  const tiles = document.createElement("div"); tiles.className = "tiles";
+  for (const r of recs.slice(0, 60)) tiles.appendChild(tileEl(r));
+  div.appendChild(tiles);
+  return div;
+}
+function renderAlbums() {
+  renderAiBar();
+  const wrap = $("albums-list");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const hasAi = state.records.some(r => r.ai);
+  if (!hasAi) {
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = aiSet.enabled ? "「AIで解析する」を押すと、雰囲気や表情で分けた自動アルバムがここにできます。" : "AI連携をオンにして解析すると、雰囲気や表情で分けた自動アルバムがここにできます（AI設定は①の画面か、上の「AI設定を開く」から）。いまは画質スコアの上位を表示します。";
+    wrap.appendChild(p);
+    const top = state.records.slice().sort((a, b) => b.score - a.score).slice(0, 12);
+    if (top.length) wrap.appendChild(albumSection("📷 くっきりベスト（画質スコア上位）", top));
+    return;
+  }
+  for (const def of ALBUM_DEFS) {
+    const recs = state.records.filter(def.test).sort((a, b) => effScore(b) - effScore(a));
+    wrap.appendChild(albumSection(def.title, recs));
+  }
+}
+function moodSearch() {
+  const q = $("mood-q").value.trim();
+  const wrap = $("mood-results");
+  wrap.innerHTML = "";
+  if (!q) return;
+  const words = q.split(/[\s　、,・]+/).filter(Boolean);
+  const hits = state.records.filter(r => {
+    const hay = [r.name, r.ai ? r.ai.mood : "", r.ai ? (r.ai.tags || []).join(" ") : "", r.ai ? r.ai.face : ""].join(" ");
+    return words.some(w => hay.includes(w));
+  }).sort((a, b) => effScore(b) - effScore(a));
+  const title = document.createElement("h3");
+  title.style.marginTop = "14px";
+  title.textContent = "「" + q + "」の検索結果（" + hits.length + "枚）";
+  wrap.appendChild(title);
+  if (!hits.length) {
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = state.records.some(r => r.ai) ? "該当する写真が見つかりませんでした。言葉を変えて試してください。" : "ムード検索はAI解析をすると使えます（タグと雰囲気の説明から探します）。";
+    wrap.appendChild(p);
+    return;
+  }
+  const tiles = document.createElement("div"); tiles.className = "tiles";
+  for (const r of hits.slice(0, 60)) tiles.appendChild(tileEl(r));
+  wrap.appendChild(tiles);
+}
+$("btn-mood").addEventListener("click", moodSearch);
+$("mood-q").addEventListener("keydown", e => { if (e.key === "Enter") moodSearch(); });
+
+renderAiBar();
+window.__phAi = { aiLoad, aiSave, aiAnalyzeBatch, aiTest, runAi, renderAlbums, moodSearch, getSettings: () => aiSet, setSettings: s => { aiSet = s; aiSave(); } };
 </script>
 </body>
 </html>

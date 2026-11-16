@@ -141,6 +141,7 @@ select,input[type=text],input[type=password]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-folder">フォルダごと選ぶ（パソコン向け）</button>
     <button type="button" class="ghost-btn" id="btn-demo">デモデータで試す（写真なしで操作を体験）</button>
     <button type="button" class="ghost-btn" id="btn-ai-open">AI連携の設定（任意・初期オフ）</button>
+    <button type="button" class="ghost-btn" id="btn-update">最新の版に更新する（表示が古いとき）</button>
     <input type="file" id="file-pick" accept="image/*" multiple hidden>
     <input type="file" id="file-folder" webkitdirectory hidden>
     <div class="counts" id="lib-counts" hidden>
@@ -250,7 +251,7 @@ select,input[type=text],input[type=password]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
   </section>
 
-  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。</p>
+  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v6</span></p>
 </div>
 
 <!-- AI設定モーダル -->
@@ -424,10 +425,18 @@ async function analyzeBlob(blob, meta) {
   }
   const n = aw * ah, mean = sum / n;
   const whitePct = white / n * 100, blackPct = black / n * 100;
-  /* 色の分布（4x4x4ヒストグラム）：構図がずれても同じ被写体を拾うための特徴 */
+  /* 色の分布（明るさで割った色合い＝色度ヒストグラム 8x8）：
+     露出が変わっても色合いは保たれるので、明るさ違いの連写でも同じ被写体を拾える */
   const histBins = new Array(64).fill(0);
-  for (let i = 0; i < px.length; i += 4) histBins[(px[i] >> 6) * 16 + (px[i + 1] >> 6) * 4 + (px[i + 2] >> 6)]++;
-  const hist = histBins.map(v => Math.round(v / n * 1000) / 1000);
+  let histN = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const s = px[i] + px[i + 1] + px[i + 2];
+    if (s < 30) continue;
+    const bx = Math.min(7, Math.floor(px[i] / s * 8)), by = Math.min(7, Math.floor(px[i + 1] / s * 8));
+    histBins[bx * 8 + by]++;
+    histN++;
+  }
+  const hist = histBins.map(v => histN ? Math.round(v / histN * 1000) / 1000 : 0);
   /* ピント：ラプラシアンの分散 */
   let lsum = 0, lsq = 0, ln = 0;
   for (let y = 1; y < ah - 1; y++) {
@@ -460,7 +469,7 @@ async function analyzeBlob(blob, meta) {
   tx.drawImage(bmp, 0, 0, tw, th);
   const thumb = await new Promise(res => tc.toBlob(res, "image/jpeg", 0.85));
   if (bmp.close) bmp.close();
-  return { w: W, h: H, thumb, hash, hist, sharp: Math.round(sharpScore), expo: Math.round(expoScore), bright: Math.round(mean), whitePct: Math.round(whitePct * 10) / 10, blackPct: Math.round(blackPct * 10) / 10, score };
+  return { w: W, h: H, thumb, hash, hist, histV: 2, sharp: Math.round(sharpScore), expo: Math.round(expoScore), bright: Math.round(mean), whitePct: Math.round(whitePct * 10) / 10, blackPct: Math.round(blackPct * 10) / 10, score };
 }
 function hashDist(a, b) {
   let d = 0;
@@ -477,6 +486,11 @@ function colorSim(ha, hb) {
   for (let i = 0; i < 64; i++) s += Math.min(ha[i] || 0, hb[i] || 0);
   return s;
 }
+/* レコード同士の色の近さ。色データの方式が違う・無い場合は null（判定に使わない） */
+function colorSimRec(ra, rb) {
+  if (!ra.hist || !rb.hist || ra.histV !== 2 || rb.histV !== 2) return null;
+  return colorSim(ra.hist, rb.hist);
+}
 
 /* ---- 類似グループ化（union-find・段階判定） ----
    A: 見た目が非常に近い（時刻不問）
@@ -484,25 +498,81 @@ function colorSim(ha, hb) {
    C: 見た目が中くらい＋色の分布が近い＋時刻が近い（構図がずれた連写向け）
    AI: AIタグが2つ以上共通＋時刻が近い＋見た目が大きくは違わない */
 const SENS_LEVELS = {
-  strict: { a: 22, b: 34, bWin: 300000, c: 52, cSim: 0.94, cWin: 900000, ai: 64, aiWin: 1800000 },
-  normal: { a: 28, b: 46, bWin: 600000, c: 74, cSim: 0.90, cWin: 1800000, ai: 80, aiWin: 3600000 },
-  wide: { a: 36, b: 58, bWin: 900000, c: 88, cSim: 0.86, cWin: 3600000, ai: 96, aiWin: 7200000 },
+  strict: { a: 22, b: 34, bWin: 300000, c: 52, cSim: 0.94, cWin: 900000, c2: 100, c2Sim: 0.95, c2Win: 900000, c3Sim: 0.97, c3Win: 300000, ai: 90, aiWin: 3600000 },
+  normal: { a: 28, b: 46, bWin: 600000, c: 74, cSim: 0.90, cWin: 1800000, c2: 120, c2Sim: 0.93, c2Win: 1800000, c3Sim: 0.96, c3Win: 600000, ai: 110, aiWin: 7200000 },
+  wide: { a: 36, b: 58, bWin: 900000, c: 88, cSim: 0.86, cWin: 3600000, c2: 140, c2Sim: 0.91, c2Win: 3600000, c3Sim: 0.945, c3Win: 1200000, ai: 130, aiWin: 10800000 },
 };
 function getSens() {
   try { return SENS_LEVELS[localStorage.getItem("ph-sens")] || SENS_LEVELS.normal; } catch (e) { return SENS_LEVELS.normal; }
 }
+function tagNorm(t) { return String(t).replace(/[\s　]/g, "").toLowerCase(); }
+function tagMatch(x, y) {
+  if (x === y) return true;
+  const s = x.length <= y.length ? x : y, l = x.length <= y.length ? y : x;
+  if (s.length >= 2) return l.includes(s);
+  return l.startsWith(s);
+}
+function sharedTags(ra, rb) {
+  if (!ra.ai || !rb.ai) return 0;
+  const A = (ra.ai.tags || []).map(tagNorm), B = (rb.ai.tags || []).map(tagNorm);
+  let n = 0;
+  for (const x of A) {
+    if (!x) continue;
+    for (const y of B) {
+      if (tagMatch(x, y)) { n++; break; }
+    }
+  }
+  return n;
+}
+function moodSim(ra, rb) {
+  if (!ra.ai || !rb.ai || !ra.ai.mood || !rb.ai.mood) return 0;
+  const grams = s => { const g = new Set(); const t = String(s); for (let i = 0; i < t.length - 1; i++) g.add(t.slice(i, i + 2)); return g; };
+  const A = grams(ra.ai.mood), B = grams(rb.ai.mood);
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  for (const g of A) if (B.has(g)) inter++;
+  return inter / (A.size + B.size - inter);
+}
 function similarPair(ra, rb, S) {
   const d = hashDist(ra.hash, rb.hash);
-  if (d <= S.a) return true;
+  const cs = colorSimRec(ra, rb);
+  if (d <= S.a && (cs === null || cs >= 0.5)) return true;
   const dt = ra.ts && rb.ts ? Math.abs(ra.ts - rb.ts) : null;
   if (dt === null) return false;
-  if (dt <= S.bWin && d <= S.b) return true;
-  if (dt <= S.cWin && d <= S.c && ra.hist && rb.hist && colorSim(ra.hist, rb.hist) >= S.cSim) return true;
+  /* 色の分布が全く違うものは別場面として扱う（色データがある場合の安全弁） */
+  if (dt <= S.bWin && d <= S.b && (cs === null || cs >= 0.5)) return true;
+  if (cs !== null) {
+    if (dt <= S.cWin && d <= S.c && cs >= S.cSim) return true;
+    if (dt <= S.c2Win && d <= S.c2 && cs >= S.c2Sim) return true;
+    if (dt <= S.c3Win && cs >= S.c3Sim) return true;
+  }
   if (dt <= S.aiWin && d <= S.ai && ra.ai && rb.ai) {
-    const shared = (ra.ai.tags || []).filter(t => (rb.ai.tags || []).includes(t)).length;
+    if (cs !== null && cs < 0.5) return false;
+    const shared = sharedTags(ra, rb);
     if (shared >= 2) return true;
+    if (shared >= 1 && moodSim(ra, rb) >= 0.3) return true;
   }
   return false;
+}
+/* グループ分けの内訳（なぜ分かれたかを見るための実測） */
+function diagnose() {
+  const recs = state.records;
+  let minD = null, maxSim = null, maxShared = 0, withHist = 0, withAi = 0;
+  for (const r of recs) { if (r.hist && r.histV === 2) withHist++; if (r.ai) withAi++; }
+  const cap = Math.min(recs.length, 60);
+  for (let i = 0; i < cap; i++) {
+    for (let j = i + 1; j < cap; j++) {
+      const d = hashDist(recs[i].hash, recs[j].hash);
+      if (!minD || d < minD.d) minD = { d, a: recs[i].name, b: recs[j].name };
+      const cs = colorSimRec(recs[i], recs[j]);
+      if (cs !== null) {
+        if (!maxSim || cs > maxSim.s) maxSim = { s: Math.round(cs * 100) / 100, a: recs[i].name, b: recs[j].name };
+      }
+      const sh = sharedTags(recs[i], recs[j]);
+      if (sh > maxShared) maxShared = sh;
+    }
+  }
+  return { n: recs.length, withHist, withAi, minD, maxSim, maxShared };
 }
 function regroup() {
   const recs = state.records;
@@ -652,7 +722,17 @@ function renderGroups() {
   const wrap = $("groups-list");
   wrap.innerHTML = "";
   if (!state.groups.size) {
-    wrap.innerHTML = '<p class="note">似ている写真のグループは見つかりませんでした。連写や同じ場面の写真を入れると、ここにまとまります。</p>';
+    let html = '<p class="note">似ている写真のグループは見つかりませんでした。連写や同じ場面の写真を入れると、ここにまとまります。</p>';
+    if (state.records.length >= 2) {
+      const dg = diagnose();
+      html += '<p class="note" style="border-top:1px solid var(--line);padding-top:8px">【グループ分けの内訳】写真 ' + dg.n + " 枚／色データのある写真 " + dg.withHist + " 枚／AI解析済み " + dg.withAi + " 枚";
+      if (dg.minD) html += "<br>一番近いペアの見た目の距離：" + dg.minD.d + "（" + dg.minD.a + " と " + dg.minD.b + "。小さいほど似ています）";
+      if (dg.maxSim) html += "<br>色の近さの最高：" + dg.maxSim.s + "（1.00が完全一致）";
+      if (dg.withAi >= 2) html += "<br>AIタグの共通の最高：" + dg.maxShared + " つ";
+      if (dg.withHist < dg.n) html += "<br>※色データのない写真は、この版より前に入れた写真です。同じ写真を入れ直すと色データが付きます（判定とAI解析は引き継がれます）";
+      html += "</p>";
+    }
+    wrap.innerHTML = html;
     return;
   }
   const gids = Array.from(state.groups.keys()).sort();
@@ -882,6 +962,20 @@ $("btn-sw-keep").addEventListener("click", () => swipeJudge("keep"));
 $("btn-sw-drop").addEventListener("click", () => swipeJudge("drop"));
 $("btn-cmp-close").addEventListener("click", () => $("cmp-modal").classList.remove("open"));
 $("btn-guide-close").addEventListener("click", () => { localStorage.setItem("phGuideSeen", "1"); $("guide3").hidden = true; $("btn-guide-open").hidden = false; });
+$("btn-update").addEventListener("click", async () => {
+  if (!confirm("最新の版を取り直しますか？写真のデータ（サムネイル・判定・AI解析）は消えません。")) return;
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if ("caches" in window) {
+      const ks = await caches.keys();
+      for (const k of ks) await caches.delete(k);
+    }
+  } catch (e) {}
+  location.reload();
+});
 try { $("sens-sel").value = localStorage.getItem("ph-sens") || "normal"; } catch (e) {}
 $("sens-sel").addEventListener("change", () => { try { localStorage.setItem("ph-sens", $("sens-sel").value); } catch (e) {} regroup(); refreshCounts(); renderAll(); });
 $("btn-guide-open").addEventListener("click", () => { $("guide3").hidden = false; $("btn-guide-open").hidden = true; });
@@ -921,7 +1015,7 @@ document.addEventListener("drop", e => e.preventDefault());
 })();
 
 /* テスト用フック */
-window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, similarPair, getSens };
+window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, colorSimRec, similarPair, getSens, sharedTags, moodSim, diagnose };
 </script>
 <script>
 "use strict";
@@ -1052,6 +1146,22 @@ async function aiTest() {
 
 /* ---- AI解析の実行（未解析だけ・途中再開可） ---- */
 let aiRunning = false, aiStop = false;
+let retryDelays = [3000, 8000, 15000];
+async function aiBatchWithRetry(blobs, onWait) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    try { return await aiAnalyzeBatch(blobs); }
+    catch (e) {
+      lastErr = e;
+      if (/quota|RESOURCE_EXHAUSTED/i.test(e.message)) throw e;
+      if (!/429|500|502|503|504|Failed to fetch|AbortError/i.test(e.message + " " + e.name)) throw e;
+      if (attempt === retryDelays.length) break;
+      if (onWait) onWait(Math.round(retryDelays[attempt] / 1000));
+      await new Promise(r => setTimeout(r, retryDelays[attempt]));
+    }
+  }
+  throw lastErr;
+}
 async function runAi() {
   if (aiRunning) { aiStop = true; return; }
   if (!aiReady()) { openAiSettings(); return; }
@@ -1066,7 +1176,9 @@ async function runAi() {
     if (aiStop) break;
     const chunk = targets.slice(s, s + BATCH);
     try {
-      const results = await aiAnalyzeBatch(chunk.map(r => r.thumb));
+      const results = await aiBatchWithRetry(chunk.map(r => r.thumb), sec => {
+        $("ai-prog-text").textContent = "AIが混雑しています（503など）。" + sec + "秒待って自動で再開します…";
+      });
       for (const res of results) {
         const rec = chunk[res.i];
         if (!rec) continue;
@@ -1232,7 +1344,7 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ()
 });
 
 renderAiBar();
-window.__phAi = { aiLoad, aiSave, aiAnalyzeBatch, aiTest, runAi, renderAlbums, moodSearch, getSettings: () => aiSet, setSettings: s => { aiSet = s; aiSave(); }, applyTheme };
+window.__phAi = { aiLoad, aiSave, aiAnalyzeBatch, aiTest, runAi, renderAlbums, moodSearch, getSettings: () => aiSet, setSettings: s => { aiSet = s; aiSave(); }, applyTheme, aiBatchWithRetry, setRetryDelays: d => { retryDelays = d; } };
 </script>
 </body>
 </html>

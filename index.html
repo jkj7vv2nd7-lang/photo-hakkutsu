@@ -40,6 +40,8 @@ h2{font-size:1.18rem;margin:0 0 8px}
 .big-btn{display:block;width:100%;min-height:58px;border-radius:12px;border:1px solid var(--amber);background:linear-gradient(180deg,#5a451a,#42320f);color:#fff;font-size:1.06rem;font-weight:700;cursor:pointer;margin-top:12px}
 .big-btn:disabled{opacity:.45;cursor:default}
 .ghost-btn{display:block;width:100%;min-height:52px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-size:.98rem;cursor:pointer;margin-top:10px}
+.danger-btn{border-color:#b0503f;color:#d97b6f}
+html[data-theme="light"] .danger-btn{border-color:#b03a2a;color:#b03a2a}
 .big-btn:active,.ghost-btn:active{transform:translateY(1px)}
 #drop{border:2px dashed #565a68;border-radius:14px;padding:26px 12px;text-align:center;color:var(--dim);margin-top:12px;font-size:.95rem}
 #drop.over{border-color:var(--amber);color:var(--amber);background:rgba(232,163,58,.06)}
@@ -142,6 +144,10 @@ select,input[type=text],input[type=password]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-demo">デモデータで試す（写真なしで操作を体験）</button>
     <button type="button" class="ghost-btn" id="btn-ai-open">AI連携の設定（任意・初期オフ）</button>
     <button type="button" class="ghost-btn" id="btn-update">最新の版に更新する（表示が古いとき）</button>
+    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:12px">
+      <button type="button" class="ghost-btn danger-btn" id="btn-reset">すべて消して最初から始める</button>
+      <p class="note">読み込んだ写真のデータ（小さな画像・判定・AI解析結果）を全部消して、0枚に戻します。AI連携の設定とキー、画面の色の設定は残ります。写真そのものには何もしません。</p>
+    </div>
     <input type="file" id="file-pick" accept="image/*" multiple hidden>
     <input type="file" id="file-folder" webkitdirectory hidden>
     <div class="counts" id="lib-counts" hidden>
@@ -150,7 +156,6 @@ select,input[type=text],input[type=password]{font-size:1rem}
       <div class="c"><b id="cnt-drop">0</b><span>削除候補</span></div>
     </div>
     <button type="button" class="big-btn" id="btn-to3" hidden>③ 整理をはじめる</button>
-    <button type="button" class="ghost-btn" id="btn-clear" hidden>読み込み済みの写真をすべて消す</button>
     <div id="err-list"></div>
   </section>
 
@@ -251,7 +256,7 @@ select,input[type=text],input[type=password]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
   </section>
 
-  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v7</span></p>
+  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v8</span></p>
 </div>
 
 <!-- AI設定モーダル -->
@@ -724,7 +729,6 @@ function refreshCounts() {
   $("cnt-groups").textContent = c.groups;
   $("cnt-drop").textContent = c.drop;
   $("btn-to3").hidden = c.all === 0;
-  $("btn-clear").hidden = c.all === 0;
   $("cnt-keep4").textContent = c.keep;
   $("cnt-drop4").textContent = c.drop;
 }
@@ -994,6 +998,19 @@ $("btn-sw-keep").addEventListener("click", () => swipeJudge("keep"));
 $("btn-sw-drop").addEventListener("click", () => swipeJudge("drop"));
 $("btn-cmp-close").addEventListener("click", () => $("cmp-modal").classList.remove("open"));
 $("btn-guide-close").addEventListener("click", () => { localStorage.setItem("phGuideSeen", "1"); $("guide3").hidden = true; $("btn-guide-open").hidden = false; });
+$("btn-reset").addEventListener("click", async () => {
+  if (window.__aiRunning) { alert("AI解析の途中です。先に③の「止める」で止めてから消してください。"); return; }
+  if (!state.records.length) { alert("まだ写真が入っていません。"); return; }
+  if (!confirm("読み込んだ写真のデータ（" + state.records.length + "枚分）を全部消しますか？\n小さな画像・判定・AI解析結果が消え、0枚に戻ります。\nAI連携の設定とキーは残ります。写真そのものには何もしません。")) return;
+  await DB.clear();
+  state.records = []; state.groups = new Map(); state.compareSet = []; state.swipeQueue = [];
+  for (const u of thumbUrls.values()) URL.revokeObjectURL(u);
+  thumbUrls.clear();
+  $("err-list").textContent = "";
+  regroup(); refreshCounts(); renderAll();
+  showStep(1);
+  alert("全部消しました。最初から始められます。");
+});
 $("btn-update").addEventListener("click", async () => {
   if (!confirm("最新の版を取り直しますか？写真のデータ（サムネイル・判定・AI解析）は消えません。")) return;
   try {
@@ -1021,15 +1038,7 @@ $("btn-to3").addEventListener("click", () => { showStep(3); renderAll(); });
 $("btn-to4").addEventListener("click", () => { showStep(4); renderChecklist(); refreshCounts(); });
 $("btn-back1").addEventListener("click", () => showStep(1));
 $("btn-back3").addEventListener("click", () => showStep(3));
-$("btn-clear").addEventListener("click", async () => {
-  if (!confirm("読み込み済みの写真（サムネイルと判定）をすべて消しますか？元の写真には影響しません。")) return;
-  await DB.clear();
-  state.records = []; state.groups = new Map();
-  for (const u of thumbUrls.values()) URL.revokeObjectURL(u);
-  thumbUrls.clear();
-  refreshCounts(); renderAll();
-  $("err-list").textContent = "";
-});
+
 const drop = $("drop");
 for (const ev of ["dragover", "dragenter"]) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); });
 for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); });
@@ -1199,7 +1208,7 @@ async function runAi() {
   if (!aiReady()) { openAiSettings(); return; }
   const targets = state.records.filter(r => !r.ai);
   if (!targets.length) return;
-  aiRunning = true; aiStop = false;
+  aiRunning = true; aiStop = false; window.__aiRunning = true;
   $("btn-ai-run").textContent = "AI解析を止める";
   $("ai-prog-wrap").hidden = false;
   const BATCH = 6;
@@ -1234,7 +1243,7 @@ async function runAi() {
     regroup(); refreshCounts(); renderAll();
   }
   if (quotaHit) $("ai-prog-text").textContent = "AIの上限に達したようです。途中まで保存しました。時間をおいて、続きから再開できます。";
-  aiRunning = false;
+  aiRunning = false; window.__aiRunning = false;
   $("btn-ai-run").textContent = "AIで解析する（感情・表情・構図）";
   regroup(); refreshCounts(); renderAll(); renderAiBar();
 }

@@ -82,6 +82,11 @@ h2{font-size:1.18rem;margin:0 0 8px}
 .foot{font-size:.74rem;color:#6d6d74;text-align:center;margin-top:22px;line-height:1.8}
 .kbd-hint{font-size:.78rem;color:var(--dim);text-align:center;margin-top:8px}
 select,input[type=text]{font-size:1rem}
+.help{background:rgba(232,163,58,.09);border-left:4px solid var(--amber);border-radius:0 10px 10px 0;padding:10px 12px;font-size:.93rem;line-height:1.75;margin:0 0 12px}
+#guide3{background:linear-gradient(180deg,#2c2410,#241d0b);border:1px solid var(--amber);border-radius:14px;padding:14px;margin-bottom:14px}
+#guide3 h3{margin:0 0 6px;font-size:1.05rem;color:#ffd98a}
+#guide3 ol{margin:6px 0 10px;padding-left:1.4em;line-height:1.85;font-size:.95rem}
+#guide3 .safe{font-size:.9rem;color:#ffd98a;line-height:1.7}
 </style>
 </head>
 <body>
@@ -101,7 +106,7 @@ select,input[type=text]{font-size:1rem}
   <!-- ① 読み込み -->
   <section class="panel" id="panel-1">
     <h2>① 写真を入れてください</h2>
-    <p class="note">iPhone・iPadでは「写真を選ぶ」から写真ライブラリの写真を選べます。パソコンでは、写真をこの画面にドラッグ＆ドロップしたり、フォルダごと選んだりもできます。<br>1回に500枚までが目安です。元の写真は端末に保存されません（小さな画像と判定結果だけを保存します）。</p>
+    <p class="note">iPhone・iPadでは「写真を選ぶ」から写真ライブラリの写真を選べます。パソコンでは、写真をこの画面にドラッグ＆ドロップしたり、フォルダごと選んだりもできます。<br>1回に500枚までが目安です。元の写真は端末に保存されません（小さな画像と判定結果だけを保存します）。<br><b style="color:#ffd98a">このアプリが写真そのものを消すことはありません。</b>「削除候補」は印だけです。</p>
     <div id="drop">ここに写真をドラッグ＆ドロップ<br>（パソコン向け）</div>
     <button type="button" class="big-btn" id="btn-pick">写真を選ぶ</button>
     <button type="button" class="ghost-btn" id="btn-folder">フォルダごと選ぶ（パソコン向け）</button>
@@ -132,13 +137,28 @@ select,input[type=text]{font-size:1rem}
   <!-- ③ 整理 -->
   <section class="panel" id="panel-3" hidden>
     <h2>③ 整理する</h2>
+    <div id="guide3" hidden>
+      <h3>整理のしかた（はじめに）</h3>
+      <ol>
+        <li>似ている写真は「グループ」にまとまり、一番良い1枚に <b>👑 残す</b>、ほかには <b>🗑️ 削除候補</b> の印が自動で付いています</li>
+        <li>印は目安です。写真を押すと「残す／削除候補」が切り替わります。迷う写真は「見比べる」で大きく見られます</li>
+        <li>全部のグループを確認したら、下のボタンで <b>④ 書き出しとお掃除ガイド</b> へ進んでください</li>
+      </ol>
+      <p class="safe">このアプリが写真を消すことはありません。実際の削除は、④のお掃除ガイドを見ながら、iCloud写真やGoogleフォトでご自身で行います。</p>
+      <button type="button" class="ghost-btn" id="btn-guide-close" style="margin-top:8px">分かった（この案内を閉じる）</button>
+    </div>
+    <button type="button" class="ghost-btn" id="btn-guide-open" hidden style="margin:0 0 12px">整理のしかたをもう一度見る</button>
     <div class="tabs">
       <button type="button" id="tab-groups" class="on">類似グループ</button>
       <button type="button" id="tab-swipe">1枚ずつ仕分け</button>
       <button type="button" id="tab-all">すべての写真</button>
     </div>
-    <div id="view-groups"></div>
+    <div id="view-groups">
+      <p class="help">似ている写真のグループです。一番良い1枚に👑、ほかは🗑️の印が自動で付いています。<b>写真を押すと印が切り替わります</b>。迷ったら「見比べる」で大きく比べてください。確認が終わったら一番下のボタンで④へ進みます。</p>
+      <div id="groups-list"></div>
+    </div>
     <div id="view-swipe" hidden>
+      <p class="help">まだ印を決めていない写真を、1枚ずつ見て仕分ける画面です。<b>👑 残す／🗑️ 削除候補</b>のボタンか、カードの左右スワイプで決めます。自動の印は目安なので、ご自分の目で決めて大丈夫です。</p>
       <div class="swipe-stage"><div class="swipe-card" id="swipe-card"></div></div>
       <div class="swipe-btns">
         <button type="button" class="btn-drop" id="btn-sw-drop">🗑️ 削除候補</button>
@@ -147,7 +167,10 @@ select,input[type=text]{font-size:1rem}
       <p class="kbd-hint">カードを左右にスワイプしても仕分けできます。パソコンでは ←（削除候補）／→（残す）キーも使えます。</p>
       <p class="note" id="swipe-left" style="text-align:center"></p>
     </div>
-    <div id="view-all" hidden><div class="grid-all" id="grid-all"></div></div>
+    <div id="view-all" hidden>
+      <p class="help">読み込んだすべての写真の一覧です。写真を押すと「👑 残す／🗑️ 削除候補」の印が切り替わります。</p>
+      <div class="grid-all" id="grid-all"></div>
+    </div>
     <button type="button" class="big-btn" id="btn-to4">④ 書き出しとお掃除ガイドへ</button>
     <button type="button" class="ghost-btn" id="btn-back1">① 写真の追加へ戻る</button>
   </section>
@@ -160,7 +183,7 @@ select,input[type=text]{font-size:1rem}
       <div class="c"><b id="cnt-drop4">0</b><span>削除候補</span></div>
     </div>
     <h3 style="margin:16px 0 4px;font-size:1.02rem">お掃除ガイド（削除候補の一覧）</h3>
-    <p class="note">この一覧を見ながら、iCloud写真やGoogleフォトで同じ写真を探して削除できます（ブラウザからは元の写真を直接消せません）。</p>
+    <p class="note">この一覧を見ながら、iCloud写真やGoogleフォトで同じ写真を探して削除できます。<b style="color:#ffd98a">このアプリが写真そのものを消すことは決してありません</b>（ブラウザからは元の写真を直接消せません）。「削除候補」は印だけで、実際の削除はこのガイドを見ながらご自身で行います。</p>
     <div id="check-list"></div>
     <p class="note" style="margin-top:14px">「残す」写真のZIP書き出しと、このガイドのCSV・印刷は第3期で入ります。</p>
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
@@ -429,6 +452,11 @@ function thumbUrl(rec) {
 }
 function showStep(n) {
   for (let i = 1; i <= 4; i++) $("panel-" + i).hidden = i !== n;
+  if (n === 3) {
+    const seen = localStorage.getItem("phGuideSeen") === "1";
+    $("guide3").hidden = seen;
+    $("btn-guide-open").hidden = !seen;
+  }
   for (const el of document.querySelectorAll("#steps .st")) {
     const s = Number(el.dataset.step);
     el.classList.toggle("on", s === n);
@@ -479,7 +507,7 @@ function tileEl(rec, opts) {
   return b;
 }
 function renderGroups() {
-  const wrap = $("view-groups");
+  const wrap = $("groups-list");
   wrap.innerHTML = "";
   if (!state.groups.size) {
     wrap.innerHTML = '<p class="note">似ている写真のグループは見つかりませんでした。連写や同じ場面の写真を入れると、ここにまとまります。</p>';
@@ -708,6 +736,8 @@ $("tab-all").addEventListener("click", () => setTab("all"));
 $("btn-sw-keep").addEventListener("click", () => swipeJudge("keep"));
 $("btn-sw-drop").addEventListener("click", () => swipeJudge("drop"));
 $("btn-cmp-close").addEventListener("click", () => $("cmp-modal").classList.remove("open"));
+$("btn-guide-close").addEventListener("click", () => { localStorage.setItem("phGuideSeen", "1"); $("guide3").hidden = true; $("btn-guide-open").hidden = false; });
+$("btn-guide-open").addEventListener("click", () => { $("guide3").hidden = false; $("btn-guide-open").hidden = true; });
 $("btn-pick").addEventListener("click", () => $("file-pick").click());
 $("btn-folder").addEventListener("click", () => $("file-folder").click());
 $("file-pick").addEventListener("change", e => { importFiles(e.target.files, false); e.target.value = ""; });

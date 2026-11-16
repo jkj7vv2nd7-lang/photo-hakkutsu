@@ -256,7 +256,7 @@ select,input[type=text],input[type=password]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
   </section>
 
-  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v8</span></p>
+  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v9</span></p>
 </div>
 
 <!-- AI設定モーダル -->
@@ -1242,7 +1242,15 @@ async function runAi() {
     $("ai-prog-text").textContent = "AI解析中 " + Math.min(done, targets.length) + " / " + targets.length + " 枚";
     regroup(); refreshCounts(); renderAll();
   }
-  if (quotaHit) $("ai-prog-text").textContent = "AIの上限に達したようです。途中まで保存しました。時間をおいて、続きから再開できます。";
+  if (quotaHit) {
+    $("ai-prog-text").textContent = "AIの上限に達したようです。途中まで保存しました。時間をおいて、続きから再開できます。";
+  } else if (aiStop) {
+    $("ai-prog-text").textContent = "止めました。解析済みは保存されています。続きは、もう一度「AIで解析する」を押せば再開できます。";
+  } else if (done >= targets.length) {
+    $("ai-prog-fill").style.width = "100%";
+    $("ai-prog-text").textContent = "AI解析が終わりました（" + targets.length + "枚）";
+    setTimeout(() => { if (!aiRunning) $("ai-prog-wrap").hidden = true; }, 4000);
+  }
   aiRunning = false; window.__aiRunning = false;
   $("btn-ai-run").textContent = "AIで解析する（感情・表情・構図）";
   regroup(); refreshCounts(); renderAll(); renderAiBar();

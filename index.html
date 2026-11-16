@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>写真発掘＆スマート断捨離</title>
+<meta name="theme-color" content="#1a1c22">
+<meta property="og:type" content="website">
+<meta property="og:title" content="写真発掘＆スマート断捨離">
+<meta property="og:description" content="溜まった写真から、似た写真をまとめて一番良い1枚を残す。ピントと明るさで判定する写真整理PWA。AI連携（任意）で感情タグや表情の判定も。">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+:root{--bg:#14151a;--panel:#1e2027;--panel2:#262932;--ink:#f2f1ec;--dim:#a7a9b3;--amber:#e8a33a;--red:#e5484d;--green:#46a758;--line:#3a3d47;--radius:16px}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:17px;line-height:1.65}
+#app{max-width:880px;margin:0 auto;padding:14px 12px 48px}
+header.top{text-align:center;padding:12px 0 4px}
+header.top h1{font-size:1.55rem;margin:0;letter-spacing:.04em}
+header.top h1 .accent{color:var(--amber)}
+header.top p{color:var(--dim);font-size:.9rem;margin:6px 0 0}
+.steps{display:flex;gap:6px;margin:16px 0 6px}
+.steps .st{flex:1;text-align:center;padding:9px 2px;border-radius:10px;background:var(--panel);color:var(--dim);font-size:.86rem;border:1px solid var(--line)}
+.steps .st.on{background:linear-gradient(180deg,#4a3a17,#3a2d10);color:#ffd98a;border-color:var(--amber);font-weight:700}
+.steps .st.done{color:var(--green);border-color:var(--green)}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 14px;margin-top:12px}
+section.panel[hidden]{display:none}
+h2{font-size:1.18rem;margin:0 0 8px}
+.note{color:var(--dim);font-size:.88rem;line-height:1.7}
+.big-btn{display:block;width:100%;min-height:58px;border-radius:12px;border:1px solid var(--amber);background:linear-gradient(180deg,#5a451a,#42320f);color:#fff;font-size:1.06rem;font-weight:700;cursor:pointer;margin-top:12px}
+.big-btn:disabled{opacity:.45;cursor:default}
+.ghost-btn{display:block;width:100%;min-height:52px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-size:.98rem;cursor:pointer;margin-top:10px}
+.big-btn:active,.ghost-btn:active{transform:translateY(1px)}
+#drop{border:2px dashed #565a68;border-radius:14px;padding:26px 12px;text-align:center;color:var(--dim);margin-top:12px;font-size:.95rem}
+#drop.over{border-color:var(--amber);color:var(--amber);background:rgba(232,163,58,.06)}
+.progress-wrap{margin-top:14px}
+.progress-bar{height:16px;background:#101116;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.progress-bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#b97e22,var(--amber));transition:width .25s}
+#prog-text{font-size:.92rem;color:var(--ink);margin-top:8px;text-align:center;min-height:1.4em}
+.counts{display:flex;gap:8px;margin-top:12px}
+.counts .c{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
+.counts .c b{display:block;font-size:1.35rem}
+.counts .c span{font-size:.78rem;color:var(--dim)}
+.tabs{display:flex;gap:6px;margin:4px 0 12px}
+.tabs button{flex:1;min-height:50px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);font-size:.94rem;cursor:pointer}
+.tabs button.on{color:#ffd98a;border-color:var(--amber);background:linear-gradient(180deg,#4a3a17,#3a2d10);font-weight:700}
+.group{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:12px}
+.group h3{margin:0 0 4px;font-size:1rem}
+.group .gmeta{color:var(--dim);font-size:.8rem;margin-bottom:8px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.tile{position:relative;border:2px solid transparent;border-radius:10px;overflow:hidden;background:#101116;cursor:pointer;padding:0;text-align:left}
+.tile img{display:block;width:100%;height:88px;object-fit:cover}
+.tile .sc{position:absolute;left:5px;bottom:5px;background:rgba(0,0,0,.72);color:#ffd98a;font-size:.72rem;padding:1px 7px;border-radius:8px}
+.tile .bdg{position:absolute;right:5px;top:5px;font-size:.7rem;padding:2px 8px;border-radius:9px;font-weight:700}
+.tile.keep{border-color:var(--green)}
+.tile.keep .bdg{background:var(--green);color:#fff}
+.tile.drop{border-color:var(--red);opacity:.75}
+.tile.drop .bdg{background:var(--red);color:#fff}
+.tile .nm{font-size:.64rem;color:var(--dim);padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grid-all{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.modal{position:fixed;inset:0;background:rgba(6,6,9,.9);display:none;z-index:40;overflow:auto;padding:14px 10px 30px}
+.modal.open{display:block}
+.modal .box{max-width:860px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+.cmp-imgs{display:flex;gap:10px;flex-wrap:wrap}
+.cmp-imgs figure{flex:1;min-width:150px;margin:0;text-align:center}
+.cmp-imgs img{max-width:100%;border-radius:10px;background:#101116}
+.cmp-imgs figcaption{font-size:.8rem;color:var(--dim);margin-top:5px}
+.swipe-stage{position:relative;min-height:340px;display:flex;align-items:center;justify-content:center}
+.swipe-card{width:min(430px,92vw);background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:12px;text-align:center;touch-action:pan-y;user-select:none}
+.swipe-card img{max-width:100%;max-height:300px;border-radius:10px;background:#101116}
+.swipe-btns{display:flex;gap:10px;margin-top:12px}
+.swipe-btns button{flex:1;min-height:58px;border-radius:12px;font-size:1.02rem;font-weight:700;cursor:pointer;border:1px solid var(--line);color:#fff}
+.btn-keep{background:linear-gradient(180deg,#2f6b3c,#245431)}
+.btn-drop{background:linear-gradient(180deg,#7c2d30,#5c1f22)}
+.check-item{display:flex;gap:10px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 10px;margin-top:7px}
+.check-item img{width:52px;height:40px;object-fit:cover;border-radius:6px}
+.check-item .ci-nm{font-size:.86rem;word-break:break-all}
+.check-item .ci-dt{font-size:.74rem;color:var(--dim)}
+#err-list{color:#ff9c9c;font-size:.86rem;margin-top:10px;line-height:1.7}
+.foot{font-size:.74rem;color:#6d6d74;text-align:center;margin-top:22px;line-height:1.8}
+.kbd-hint{font-size:.78rem;color:var(--dim);text-align:center;margin-top:8px}
+select,input[type=text]{font-size:1rem}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <h1>写真<span class="accent">発掘</span>＆スマート断捨離</h1>
+    <p>似た写真をまとめて、一番良い1枚を残すお手伝いをします</p>
+  </header>
+
+  <nav class="steps" id="steps">
+    <div class="st on" data-step="1">① 写真を入れる</div>
+    <div class="st" data-step="2">② 解析</div>
+    <div class="st" data-step="3">③ 整理する</div>
+    <div class="st" data-step="4">④ 書き出し</div>
+  </nav>
+
+  <!-- ① 読み込み -->
+  <section class="panel" id="panel-1">
+    <h2>① 写真を入れてください</h2>
+    <p class="note">iPhone・iPadでは「写真を選ぶ」から写真ライブラリの写真を選べます。パソコンでは、写真をこの画面にドラッグ＆ドロップしたり、フォルダごと選んだりもできます。<br>1回に500枚までが目安です。元の写真は端末に保存されません（小さな画像と判定結果だけを保存します）。</p>
+    <div id="drop">ここに写真をドラッグ＆ドロップ<br>（パソコン向け）</div>
+    <button type="button" class="big-btn" id="btn-pick">写真を選ぶ</button>
+    <button type="button" class="ghost-btn" id="btn-folder">フォルダごと選ぶ（パソコン向け）</button>
+    <button type="button" class="ghost-btn" id="btn-demo">デモデータで試す（写真なしで操作を体験）</button>
+    <input type="file" id="file-pick" accept="image/*" multiple hidden>
+    <input type="file" id="file-folder" webkitdirectory hidden>
+    <div class="counts" id="lib-counts" hidden>
+      <div class="c"><b id="cnt-all">0</b><span>読み込み済み</span></div>
+      <div class="c"><b id="cnt-groups">0</b><span>類似グループ</span></div>
+      <div class="c"><b id="cnt-drop">0</b><span>削除候補</span></div>
+    </div>
+    <button type="button" class="big-btn" id="btn-to3" hidden>③ 整理をはじめる</button>
+    <button type="button" class="ghost-btn" id="btn-clear" hidden>読み込み済みの写真をすべて消す</button>
+    <div id="err-list"></div>
+  </section>
+
+  <!-- ② 解析 -->
+  <section class="panel" id="panel-2" hidden>
+    <h2>② 解析しています</h2>
+    <div class="progress-wrap">
+      <div class="progress-bar"><i id="prog-fill"></i></div>
+      <div id="prog-text">準備中…</div>
+    </div>
+    <p class="note">ピントの合い具合、明るさ（白飛び・黒つぶれ）、似ている写真の検出、撮影日時を調べています。写真は端末の外に送られません。</p>
+    <button type="button" class="ghost-btn" id="btn-cancel">解析を止める</button>
+  </section>
+
+  <!-- ③ 整理 -->
+  <section class="panel" id="panel-3" hidden>
+    <h2>③ 整理する</h2>
+    <div class="tabs">
+      <button type="button" id="tab-groups" class="on">類似グループ</button>
+      <button type="button" id="tab-swipe">1枚ずつ仕分け</button>
+      <button type="button" id="tab-all">すべての写真</button>
+    </div>
+    <div id="view-groups"></div>
+    <div id="view-swipe" hidden>
+      <div class="swipe-stage"><div class="swipe-card" id="swipe-card"></div></div>
+      <div class="swipe-btns">
+        <button type="button" class="btn-drop" id="btn-sw-drop">🗑️ 削除候補</button>
+        <button type="button" class="btn-keep" id="btn-sw-keep">👑 残す</button>
+      </div>
+      <p class="kbd-hint">カードを左右にスワイプしても仕分けできます。パソコンでは ←（削除候補）／→（残す）キーも使えます。</p>
+      <p class="note" id="swipe-left" style="text-align:center"></p>
+    </div>
+    <div id="view-all" hidden><div class="grid-all" id="grid-all"></div></div>
+    <button type="button" class="big-btn" id="btn-to4">④ 書き出しとお掃除ガイドへ</button>
+    <button type="button" class="ghost-btn" id="btn-back1">① 写真の追加へ戻る</button>
+  </section>
+
+  <!-- ④ 書き出し -->
+  <section class="panel" id="panel-4" hidden>
+    <h2>④ 書き出しとお掃除ガイド</h2>
+    <div class="counts">
+      <div class="c"><b id="cnt-keep4">0</b><span>残す</span></div>
+      <div class="c"><b id="cnt-drop4">0</b><span>削除候補</span></div>
+    </div>
+    <h3 style="margin:16px 0 4px;font-size:1.02rem">お掃除ガイド（削除候補の一覧）</h3>
+    <p class="note">この一覧を見ながら、iCloud写真やGoogleフォトで同じ写真を探して削除できます（ブラウザからは元の写真を直接消せません）。</p>
+    <div id="check-list"></div>
+    <p class="note" style="margin-top:14px">「残す」写真のZIP書き出しと、このガイドのCSV・印刷は第3期で入ります。</p>
+    <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
+  </section>
+
+  <p class="foot">写真は端末の中でだけ処理します。AI連携（任意・初期オフ）は第2期で入ります。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。</p>
+</div>
+
+<!-- 比較モーダル -->
+<div class="modal" id="cmp-modal">
+  <div class="box">
+    <h2 style="margin-bottom:4px">見比べる</h2>
+    <p class="note">写真を2枚まで選ぶと、並べて大きく表示します。ピントや表情を見比べてください。</p>
+    <div class="tiles" id="cmp-pick" style="margin-top:10px"></div>
+    <div class="cmp-imgs" id="cmp-imgs" style="margin-top:12px"></div>
+    <button type="button" class="ghost-btn" id="btn-cmp-close">閉じる</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= 基盤：状態・保存・解析 ================= */
+const $ = id => document.getElementById(id);
+const state = { records: [], groups: new Map(), cancel: false, busy: false };
+const effVerdict = r => r.verdict || r.suggest || "keep";
+const isDemoId = id => String(id).startsWith("demo-");
+
+const DB = {
+  dbp: null,
+  open() {
+    if (this.dbp) return this.dbp;
+    this.dbp = new Promise((res, rej) => {
+      const rq = indexedDB.open("photo-hakkutsu", 1);
+      rq.onupgradeneeded = () => { rq.result.createObjectStore("photos", { keyPath: "id" }); };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    });
+    return this.dbp;
+  },
+  async put(rec) {
+    const db = await this.open();
+    return new Promise(res => { const rq = db.transaction("photos", "readwrite").objectStore("photos").put(rec); rq.onsuccess = () => res(true); rq.onerror = () => res(false); });
+  },
+  async all() {
+    const db = await this.open();
+    return new Promise(res => { const rq = db.transaction("photos").objectStore("photos").getAll(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]); });
+  },
+  async clear() {
+    const db = await this.open();
+    return new Promise(res => { const rq = db.transaction("photos", "readwrite").objectStore("photos").clear(); rq.onsuccess = () => res(true); rq.onerror = () => res(false); });
+  },
+};
+
+/* ---- EXIF（JPEG最小パーサ：撮影日時だけ） ---- */
+async function readExifTime(file) {
+  try {
+    if (!/jpe?g$/i.test(file.type || "") && !/\.jpe?g$/i.test(file.name || "")) return null;
+    const buf = await file.slice(0, 262144).arrayBuffer();
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xffd8) return null;
+    let off = 2;
+    while (off + 4 < v.byteLength) {
+      const marker = v.getUint16(off);
+      const len = v.getUint16(off + 2);
+      if (marker === 0xffe1 && len > 10 && v.getUint32(off + 4) === 0x45786966) { /* Exif */
+        const tiff = off + 10;
+        const le = v.getUint16(tiff) === 0x4949;
+        const g16 = o => v.getUint16(o, le), g32 = o => v.getUint32(o, le);
+        const readStr = (o, n) => { let s = ""; for (let i = 0; i < n; i++) { const c = v.getUint8(o + i); if (!c) break; s += String.fromCharCode(c); } return s; };
+        const findTag = (ifdOff, tag) => {
+          const n = g16(ifdOff);
+          for (let i = 0; i < n; i++) {
+            const e = ifdOff + 2 + i * 12;
+            if (g16(e) === tag) return e;
+          }
+          return -1;
+        };
+        const ifd0 = tiff + g32(tiff + 4);
+        let dateStr = null;
+        const exifPtr = findTag(ifd0, 0x8769);
+        if (exifPtr >= 0) {
+          const exifIfd = tiff + g32(exifPtr + 8);
+          const dt = findTag(exifIfd, 0x9003);
+          if (dt >= 0) dateStr = readStr(tiff + g32(dt + 8), 20);
+        }
+        if (!dateStr) {
+          const dt0 = findTag(ifd0, 0x0132);
+          if (dt0 >= 0) dateStr = readStr(g32(dt0 + 8) > 4 ? tiff + g32(dt0 + 8) : dt0 + 8, 20);
+        }
+        if (dateStr) {
+          const m = dateStr.match(/(\d{4}):(\d{2}):(\d{2})[ ](\d{2}):(\d{2}):(\d{2})/);
+          if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+        }
+        return null;
+      }
+      if ((marker & 0xff00) !== 0xff00 || len < 2) break;
+      off += 2 + len;
+    }
+  } catch (e) {}
+  return null;
+}
+
+/* ---- 画像の読み込み（向き補正つき） ---- */
+async function loadBitmap(blob) {
+  try {
+    return await createImageBitmap(blob, { imageOrientation: "from-image" });
+  } catch (e) {
+    try { return await createImageBitmap(blob); } catch (e2) {}
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    return img;
+  } finally { setTimeout(() => URL.revokeObjectURL(url), 4000); }
+}
+function mkCanvas(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+
+/* ---- ローカル解析 ---- */
+async function analyzeBlob(blob, meta) {
+  const bmp = await loadBitmap(blob);
+  const W = bmp.width || bmp.naturalWidth, H = bmp.height || bmp.naturalHeight;
+  if (!W || !H) throw new Error("画像の大きさが分かりませんでした");
+  /* 解析用 256px */
+  const aw = 256, ah = Math.max(2, Math.round(256 * H / W));
+  const ac = mkCanvas(aw, ah), ax = ac.getContext("2d", { willReadFrequently: true });
+  ax.drawImage(bmp, 0, 0, aw, ah);
+  const px = ax.getImageData(0, 0, aw, ah).data;
+  const gray = new Float32Array(aw * ah);
+  let sum = 0, white = 0, black = 0;
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) {
+    const g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    gray[j] = g; sum += g;
+    if (g > 250) white++; if (g < 5) black++;
+  }
+  const n = aw * ah, mean = sum / n;
+  const whitePct = white / n * 100, blackPct = black / n * 100;
+  /* ピント：ラプラシアンの分散 */
+  let lsum = 0, lsq = 0, ln = 0;
+  for (let y = 1; y < ah - 1; y++) {
+    for (let x = 1; x < aw - 1; x++) {
+      const j = y * aw + x;
+      const lap = 4 * gray[j] - gray[j - 1] - gray[j + 1] - gray[j - aw] - gray[j + aw];
+      lsum += lap; lsq += lap * lap; ln++;
+    }
+  }
+  const lapMean = lsum / ln, lapVar = lsq / ln - lapMean * lapMean;
+  const sharpScore = Math.max(0, Math.min(100, (Math.log10(lapVar + 1) - 0.7) / 2.6 * 100));
+  let expoScore = 100 - Math.min(60, whitePct * 3) - Math.min(40, blackPct * 1.2);
+  if (mean < 25 || mean > 235) expoScore -= 15;
+  expoScore = Math.max(0, Math.min(100, expoScore));
+  const score = Math.round(sharpScore * 0.65 + expoScore * 0.35);
+  /* dHash 16x16（17x16で比較） */
+  const hw = 17, hh = 16;
+  const hc = mkCanvas(hw, hh), hx = hc.getContext("2d", { willReadFrequently: true });
+  hx.drawImage(bmp, 0, 0, hw, hh);
+  const hp = hx.getImageData(0, 0, hw, hh).data;
+  const hg = [];
+  for (let i = 0; i < hp.length; i += 4) hg.push(0.299 * hp[i] + 0.587 * hp[i + 1] + 0.114 * hp[i + 2]);
+  let bits = "";
+  for (let y = 0; y < hh; y++) for (let x = 0; x < hw - 1; x++) bits += hg[y * hw + x] > hg[y * hw + x + 1] ? "1" : "0";
+  let hash = "";
+  for (let i = 0; i < bits.length; i += 4) hash += parseInt(bits.slice(i, i + 4).padEnd(4, "0"), 2).toString(16);
+  /* 保存用サムネイル（長辺448） */
+  const tw = W >= H ? 448 : Math.round(448 * W / H), th = W >= H ? Math.round(448 * H / W) : 448;
+  const tc = mkCanvas(tw, th), tx = tc.getContext("2d");
+  tx.drawImage(bmp, 0, 0, tw, th);
+  const thumb = await new Promise(res => tc.toBlob(res, "image/jpeg", 0.85));
+  if (bmp.close) bmp.close();
+  return { w: W, h: H, thumb, hash, sharp: Math.round(sharpScore), expo: Math.round(expoScore), bright: Math.round(mean), whitePct: Math.round(whitePct * 10) / 10, blackPct: Math.round(blackPct * 10) / 10, score };
+}
+function hashDist(a, b) {
+  let d = 0;
+  const L = Math.min(a.length, b.length);
+  for (let i = 0; i < L; i++) {
+    let x = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    while (x) { d += x & 1; x >>= 1; }
+  }
+  return d + Math.abs(a.length - b.length) * 4;
+}
+
+/* ---- 類似グループ化（union-find） ---- */
+function regroup() {
+  const recs = state.records;
+  const parent = recs.map((_, i) => i);
+  const find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const unite = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+  const TH = 30, TW = 180000;
+  const sorted = recs.map((r, i) => [r.ts || 0, i]).sort((a, b) => a[0] - b[0]);
+  for (let a = 0; a < sorted.length; a++) {
+    for (let b = a + 1; b < sorted.length; b++) {
+      const dt = Math.abs(sorted[a][0] - sorted[b][0]);
+      if (sorted[a][0] && sorted[b][0] && dt > TW) break;
+      const ra = recs[sorted[a][1]], rb = recs[sorted[b][1]];
+      if (hashDist(ra.hash, rb.hash) <= TH) unite(sorted[a][1], sorted[b][1]);
+    }
+  }
+  const map = new Map();
+  recs.forEach((r, i) => { const root = find(i); if (!map.has(root)) map.set(root, []); map.get(root).push(r); });
+  state.groups = new Map();
+  let g = 0;
+  for (const arr of map.values()) {
+    if (arr.length >= 2) {
+      g++;
+      const gid = "g" + g;
+      let best = arr[0];
+      for (const r of arr) { r.groupId = gid; if (r.score > best.score) best = r; }
+      for (const r of arr) r.suggest = r === best ? "keep" : "drop";
+      state.groups.set(gid, arr.slice().sort((a, b) => b.score - a.score));
+    } else {
+      arr[0].groupId = null;
+      arr[0].suggest = "keep";
+    }
+  }
+}
+
+/* ---- 読み込みと解析の進行 ---- */
+async function importFiles(files, demoMode) {
+  const list = Array.from(files).filter(f => (f.type || "").startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f.name || ""));
+  if (!list.length) { $("err-list").textContent = "画像ファイルが見つかりませんでした。"; return; }
+  if (list.length > 500) { $("err-list").textContent = "1回に500枚までを目安にしてください（今回は先頭の500枚を読み込みます）。"; }
+  const targets = list.slice(0, 500);
+  showStep(2);
+  state.cancel = false; state.busy = true;
+  const errors = [];
+  let done = 0;
+  for (const f of targets) {
+    if (state.cancel) break;
+    done++;
+    $("prog-fill").style.width = Math.round(done / targets.length * 100) + "%";
+    $("prog-text").textContent = "解析中 " + done + " / " + targets.length + " 枚（" + (f.name || "写真") + "）";
+    try {
+      const id = demoMode ? f.__demoId : (f.name + "|" + f.size + "|" + f.lastModified);
+      if (!demoMode && state.records.some(r => r.id === id)) continue;
+      const exifTs = demoMode ? f.__demoTs : await readExifTime(f);
+      const a = await analyzeBlob(f, {});
+      const rec = Object.assign({
+        id, name: f.name || "写真", size: f.size || 0,
+        ts: exifTs || f.lastModified || Date.now(),
+        verdict: null, suggest: "keep", groupId: null, demo: !!demoMode,
+      }, a);
+      await DB.put(rec);
+      const ix = state.records.findIndex(r => r.id === id);
+      if (ix >= 0) state.records[ix] = rec; else state.records.push(rec);
+    } catch (e) {
+      errors.push("・" + (f.name || "写真") + "：この形式は開けませんでした（HEIC等はSafariで開ける場合があります）");
+    }
+    if (done % 4 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+  state.busy = false;
+  regroup();
+  refreshCounts();
+  if (errors.length) $("err-list").innerHTML = errors.slice(0, 12).join("<br>") + (errors.length > 12 ? "<br>ほか " + (errors.length - 12) + " 件" : "");
+  showStep(state.records.length ? 3 : 1);
+  renderAll();
+}
+</script>
+
+<script>
+"use strict";
+/* ================= 画面：ステップ・整理UI・デモ ================= */
+const thumbUrls = new Map();
+function thumbUrl(rec) {
+  if (!thumbUrls.has(rec.id)) thumbUrls.set(rec.id, URL.createObjectURL(rec.thumb));
+  return thumbUrls.get(rec.id);
+}
+function showStep(n) {
+  for (let i = 1; i <= 4; i++) $("panel-" + i).hidden = i !== n;
+  for (const el of document.querySelectorAll("#steps .st")) {
+    const s = Number(el.dataset.step);
+    el.classList.toggle("on", s === n);
+    el.classList.toggle("done", s < n);
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+function counts() {
+  const all = state.records.length;
+  const drop = state.records.filter(r => effVerdict(r) === "drop").length;
+  return { all, groups: state.groups.size, drop, keep: all - drop };
+}
+function refreshCounts() {
+  const c = counts();
+  $("lib-counts").hidden = c.all === 0;
+  $("cnt-all").textContent = c.all;
+  $("cnt-groups").textContent = c.groups;
+  $("cnt-drop").textContent = c.drop;
+  $("btn-to3").hidden = c.all === 0;
+  $("btn-clear").hidden = c.all === 0;
+  $("cnt-keep4").textContent = c.keep;
+  $("cnt-drop4").textContent = c.drop;
+}
+async function setVerdict(rec, v) {
+  rec.verdict = rec.verdict === v ? null : v;
+  await DB.put(rec);
+  refreshCounts();
+  renderAll();
+}
+function tileEl(rec, opts) {
+  opts = opts || {};
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "tile " + effVerdict(rec);
+  b.dataset.id = rec.id;
+  const img = document.createElement("img");
+  img.src = thumbUrl(rec); img.alt = rec.name; img.loading = "lazy";
+  const sc = document.createElement("span"); sc.className = "sc"; sc.textContent = "画質 " + rec.score;
+  const bdg = document.createElement("span"); bdg.className = "bdg";
+  bdg.textContent = effVerdict(rec) === "keep" ? "👑 残す" : "🗑️ 候補";
+  const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = rec.name;
+  b.appendChild(img); b.appendChild(sc); b.appendChild(bdg); b.appendChild(nm);
+  if (!opts.noToggle) b.addEventListener("click", () => setVerdict(rec, effVerdict(rec) === "keep" ? "drop" : "keep"));
+  return b;
+}
+function renderGroups() {
+  const wrap = $("view-groups");
+  wrap.innerHTML = "";
+  if (!state.groups.size) {
+    wrap.innerHTML = '<p class="note">似ている写真のグループは見つかりませんでした。連写や同じ場面の写真を入れると、ここにまとまります。</p>';
+    return;
+  }
+  const gids = Array.from(state.groups.keys()).sort();
+  for (const gid of gids) {
+    const arr = state.groups.get(gid);
+    const div = document.createElement("div");
+    div.className = "group"; div.dataset.gid = gid;
+    const best = arr[0];
+    div.innerHTML = "<h3>類似グループ（" + arr.length + "枚）</h3><div class='gmeta'>" + fmtDate(Math.min.apply(null, arr.map(r => r.ts))) + " ごろ ・ 一番良い1枚に 👑 が付いています。写真を押すと「残す／削除候補」が切り替わります。</div>";
+    const tiles = document.createElement("div"); tiles.className = "tiles";
+    for (const r of arr) tiles.appendChild(tileEl(r));
+    div.appendChild(tiles);
+    const cmp = document.createElement("button");
+    cmp.type = "button"; cmp.className = "ghost-btn"; cmp.textContent = "見比べる（大きく見る）";
+    cmp.addEventListener("click", () => openCompare(arr));
+    div.appendChild(cmp);
+    wrap.appendChild(div);
+  }
+}
+function renderChecklist() {
+  const wrap = $("check-list");
+  wrap.innerHTML = "";
+  const drops = state.records.filter(r => effVerdict(r) === "drop").sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  if (!drops.length) { wrap.innerHTML = '<p class="note">削除候補はまだありません。</p>'; return; }
+  for (const r of drops) {
+    const d = document.createElement("div");
+    d.className = "check-item";
+    d.innerHTML = "<img alt=''><div><div class='ci-nm'></div><div class='ci-dt'></div></div>";
+    d.querySelector("img").src = thumbUrl(r);
+    d.querySelector(".ci-nm").textContent = r.name;
+    d.querySelector(".ci-dt").textContent = fmtDate(r.ts) + " ・ 画質スコア " + r.score;
+    wrap.appendChild(d);
+  }
+}
+function renderAll() {
+  renderGroups(); renderGridAll(); renderChecklist(); renderSwipe();
+}
+function renderGridAll() {
+  const grid = $("grid-all");
+  grid.innerHTML = "";
+  const sorted = state.records.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  for (const r of sorted) grid.appendChild(tileEl(r));
+}
+
+/* ---- 比較モーダル ---- */
+let cmpSel = [];
+function openCompare(arr) {
+  cmpSel = [];
+  const pick = $("cmp-pick");
+  pick.innerHTML = "";
+  $("cmp-imgs").innerHTML = "";
+  for (const r of arr) {
+    const t = tileEl(r, { noToggle: true });
+    t.addEventListener("click", () => {
+      const ix = cmpSel.indexOf(r);
+      if (ix >= 0) cmpSel.splice(ix, 1); else { cmpSel.push(r); if (cmpSel.length > 2) cmpSel.shift(); }
+      drawCmp(arr);
+    });
+    pick.appendChild(t);
+  }
+  $("cmp-modal").classList.add("open");
+}
+function drawCmp() {
+  const wrap = $("cmp-imgs");
+  wrap.innerHTML = "";
+  for (const r of cmpSel) {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    img.src = thumbUrl(r);
+    const cap = document.createElement("figcaption");
+    cap.textContent = r.name + " ・ 画質 " + r.score + "（ピント " + r.sharp + "／露出 " + r.expo + "）";
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "ghost-btn";
+    btn.textContent = effVerdict(r) === "keep" ? "いま：👑 残す（押すと候補に）" : "いま：🗑️ 削除候補（押すと残すに）";
+    btn.addEventListener("click", async () => { await setVerdict(r, effVerdict(r) === "keep" ? "drop" : "keep"); drawCmp(); });
+    fig.appendChild(img); fig.appendChild(cap); fig.appendChild(btn);
+    wrap.appendChild(fig);
+  }
+}
+
+/* ---- スワイプ仕分け ---- */
+let swipeQueue = [], swipeIx = 0;
+function buildSwipeQueue() {
+  swipeQueue = state.records.filter(r => !r.verdict).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  swipeIx = 0;
+}
+function renderSwipe() {
+  const card = $("swipe-card");
+  if (!state.records.length) { card.innerHTML = '<p class="note">写真がまだありません。</p>'; $("swipe-left").textContent = ""; return; }
+  if (!swipeQueue.length || swipeIx >= swipeQueue.length) buildSwipeQueue();
+  if (swipeIx >= swipeQueue.length) {
+    card.innerHTML = '<p style="font-size:1.05rem">未判定の写真は全部仕分けました 🎉</p><p class="note">下のボタンでもう一度最初から見直せます。</p><button type="button" class="ghost-btn" id="btn-sw-restart">もう一度見直す</button>';
+    $("btn-sw-restart").addEventListener("click", () => { swipeQueue = state.records.slice(); swipeIx = 0; renderSwipe(); });
+    $("swipe-left").textContent = "";
+    return;
+  }
+  const r = swipeQueue[swipeIx];
+  card.style.transform = "";
+  card.innerHTML = "";
+  const img = document.createElement("img"); img.src = thumbUrl(r); img.alt = r.name; img.draggable = false;
+  const meta = document.createElement("div");
+  meta.className = "note"; meta.style.marginTop = "8px";
+  meta.textContent = r.name + " ・ " + fmtDate(r.ts) + " ・ 画質スコア " + r.score + "（ピント " + r.sharp + "／露出 " + r.expo + "）" + (r.groupId ? " ・ 類似グループあり" : "");
+  card.appendChild(img); card.appendChild(meta);
+  $("swipe-left").textContent = "あと " + (swipeQueue.length - swipeIx) + " 枚（未判定）";
+}
+async function swipeJudge(v) {
+  if (swipeIx >= swipeQueue.length) return;
+  const r = swipeQueue[swipeIx];
+  r.verdict = v;
+  await DB.put(r);
+  swipeIx++;
+  refreshCounts(); renderGroups(); renderGridAll(); renderChecklist(); renderSwipe();
+}
+let swX = null;
+$("swipe-card").addEventListener("pointerdown", e => { swX = e.clientX; });
+window.addEventListener("pointermove", e => {
+  if (swX === null) return;
+  const dx = e.clientX - swX;
+  $("swipe-card").style.transform = "translateX(" + dx + "px) rotate(" + dx / 28 + "deg)";
+});
+window.addEventListener("pointerup", e => {
+  if (swX === null) return;
+  const dx = e.clientX - swX;
+  swX = null;
+  if (dx > 70) swipeJudge("keep");
+  else if (dx < -70) swipeJudge("drop");
+  else $("swipe-card").style.transform = "";
+});
+window.addEventListener("keydown", e => {
+  if ($("panel-3").hidden || $("view-swipe").hidden) return;
+  if (e.key === "ArrowRight" || e.key === "Enter") swipeJudge("keep");
+  else if (e.key === "ArrowLeft" || e.key === "Delete" || e.key === "Backspace") swipeJudge("drop");
+});
+
+/* ---- デモデータ（本物の解析を通す） ---- */
+function demoScene(kind, variant) {
+  const c = mkCanvas(640, 480), x = c.getContext("2d");
+  const blur = variant === "blur", dark = variant === "dark", bright = variant === "bright";
+  if (kind === "flower") {
+    const g = x.createLinearGradient(0, 0, 0, 480);
+    g.addColorStop(0, "#7db35a"); g.addColorStop(1, "#3f7031");
+    x.fillStyle = g; x.fillRect(0, 0, 640, 480);
+    const cols = ["#e86a8a", "#f2d060", "#ffffff", "#e88a4a"];
+    for (let i = 0; i < 26; i++) {
+      const fx = (i * 173) % 600 + 20, fy = (i * 211) % 420 + 30;
+      x.fillStyle = cols[i % 4];
+      for (let p = 0; p < 5; p++) { const a = p / 5 * Math.PI * 2; x.beginPath(); x.ellipse(fx + Math.cos(a) * 13, fy + Math.sin(a) * 13, 11, 7, a, 0, 7); x.fill(); }
+      x.fillStyle = "#f7b731"; x.beginPath(); x.arc(fx, fy, 7, 0, 7); x.fill();
+    }
+  } else if (kind === "cat") {
+    x.fillStyle = "#8a8f98"; x.fillRect(0, 0, 640, 480);
+    x.fillStyle = "#5c6068"; x.fillRect(0, 340, 640, 140);
+    x.fillStyle = "#d8d8de";
+    x.beginPath(); x.moveTo(210, 210); x.lineTo(250, 90); x.lineTo(320, 170); x.closePath(); x.fill();
+    x.beginPath(); x.moveTo(430, 210); x.lineTo(390, 90); x.lineTo(320, 170); x.closePath(); x.fill();
+    x.beginPath(); x.arc(320, 280, 130, 0, 7); x.fill();
+    x.fillStyle = "#2b2b30";
+    if (variant === "half") { x.fillRect(238, 246, 56, 9); x.fillRect(346, 246, 56, 9); }
+    else { x.beginPath(); x.arc(266, 250, 15, 0, 7); x.arc(374, 250, 15, 0, 7); x.fill(); }
+    x.fillStyle = "#e88a9a"; x.beginPath(); x.moveTo(308, 300); x.lineTo(332, 300); x.lineTo(320, 314); x.closePath(); x.fill();
+    x.strokeStyle = "#9a9aa2"; x.lineWidth = 3;
+    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { x.beginPath(); x.moveTo(320 + s * 44, 306 + i * 10); x.lineTo(320 + s * 118, 292 + i * 16); x.stroke(); }
+  } else {
+    const g = x.createLinearGradient(0, 0, 0, 480);
+    g.addColorStop(0, "#f7b267"); g.addColorStop(0.6, "#e86a4a"); g.addColorStop(1, "#7a3a5a");
+    x.fillStyle = g; x.fillRect(0, 0, 640, 480);
+    x.fillStyle = "#ffd98a"; x.beginPath(); x.arc(430, 190, 52, 0, 7); x.fill();
+    x.fillStyle = "#4a2c44";
+    x.beginPath(); x.moveTo(0, 480); x.lineTo(0, 350); x.lineTo(220, 260); x.lineTo(430, 350); x.lineTo(640, 290); x.lineTo(640, 480); x.closePath(); x.fill();
+  }
+  if (blur) {
+    const s = mkCanvas(80, 60), sx = s.getContext("2d");
+    sx.drawImage(c, 0, 0, 80, 60);
+    x.imageSmoothingEnabled = true;
+    x.clearRect(0, 0, 640, 480);
+    x.drawImage(s, 0, 0, 640, 480);
+  }
+  if (dark) { x.fillStyle = "rgba(0,0,20,0.45)"; x.fillRect(0, 0, 640, 480); }
+  if (bright) { x.fillStyle = "rgba(255,255,240,0.42)"; x.fillRect(0, 0, 640, 480); }
+  return c;
+}
+async function loadDemo() {
+  const plan = [
+    ["flower", "sharp", "デモ-花畑1.jpg"], ["flower", "blur", "デモ-花畑2.jpg"], ["flower", "dark", "デモ-花畑3.jpg"], ["flower", "bright", "デモ-花畑4.jpg"],
+    ["cat", "sharp", "デモ-猫1.jpg"], ["cat", "half", "デモ-猫2.jpg"], ["cat", "blur", "デモ-猫3.jpg"],
+    ["sunset", "sharp", "デモ-夕景1.jpg"], ["sunset", "blur", "デモ-夕景2.jpg"], ["sunset", "dark", "デモ-夕景3.jpg"],
+  ];
+  const base = Date.now() - 86400000;
+  const sceneBase = { flower: 0, cat: 2 * 3600000, sunset: 5 * 3600000 };
+  const sceneIx = { flower: 0, cat: 0, sunset: 0 };
+  const files = [];
+  for (const [kind, variant, name] of plan) {
+    const ts = base + sceneBase[kind] + (sceneIx[kind]++) * 30000;
+    const blob = await new Promise(res => demoScene(kind, variant).toBlob(res, "image/jpeg", 0.92));
+    const f = new File([blob], name, { type: "image/jpeg", lastModified: ts });
+    f.__demoId = "demo-" + name;
+    f.__demoTs = ts;
+    files.push(f);
+  }
+  /* 単独の3枚（グループにならない） */
+  for (const [kind, name, off] of [["flower", "デモ-単独・花.jpg", 0], ["cat", "デモ-単独・猫.jpg", 1], ["sunset", "デモ-単独・夕景.jpg", 2]]) {
+    const blob = await new Promise(res => demoScene(kind, "sharp").toBlob(res, "image/jpeg", 0.92));
+    const f = new File([blob], name, { type: "image/jpeg", lastModified: base + (30 + off * 7) * 3600000 });
+    f.__demoId = "demo-" + name;
+    f.__demoTs = base + (30 + off * 7) * 3600000;
+    files.push(f);
+  }
+  await importFiles(files, true);
+}
+
+/* ---- 画面遷移とイベント ---- */
+function setTab(which) {
+  for (const t of ["groups", "swipe", "all"]) {
+    $("tab-" + t).classList.toggle("on", t === which);
+    $("view-" + t).hidden = t !== which;
+  }
+  if (which === "swipe") renderSwipe();
+}
+$("tab-groups").addEventListener("click", () => setTab("groups"));
+$("tab-swipe").addEventListener("click", () => setTab("swipe"));
+$("tab-all").addEventListener("click", () => setTab("all"));
+$("btn-sw-keep").addEventListener("click", () => swipeJudge("keep"));
+$("btn-sw-drop").addEventListener("click", () => swipeJudge("drop"));
+$("btn-cmp-close").addEventListener("click", () => $("cmp-modal").classList.remove("open"));
+$("btn-pick").addEventListener("click", () => $("file-pick").click());
+$("btn-folder").addEventListener("click", () => $("file-folder").click());
+$("file-pick").addEventListener("change", e => { importFiles(e.target.files, false); e.target.value = ""; });
+$("file-folder").addEventListener("change", e => { importFiles(e.target.files, false); e.target.value = ""; });
+$("btn-demo").addEventListener("click", () => loadDemo());
+$("btn-cancel").addEventListener("click", () => { state.cancel = true; });
+$("btn-to3").addEventListener("click", () => { showStep(3); renderAll(); });
+$("btn-to4").addEventListener("click", () => { showStep(4); renderChecklist(); refreshCounts(); });
+$("btn-back1").addEventListener("click", () => showStep(1));
+$("btn-back3").addEventListener("click", () => showStep(3));
+$("btn-clear").addEventListener("click", async () => {
+  if (!confirm("読み込み済みの写真（サムネイルと判定）をすべて消しますか？元の写真には影響しません。")) return;
+  await DB.clear();
+  state.records = []; state.groups = new Map();
+  for (const u of thumbUrls.values()) URL.revokeObjectURL(u);
+  thumbUrls.clear();
+  refreshCounts(); renderAll();
+  $("err-list").textContent = "";
+});
+const drop = $("drop");
+for (const ev of ["dragover", "dragenter"]) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); });
+for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); });
+drop.addEventListener("drop", e => { if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files, false); });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => e.preventDefault());
+
+/* ---- 初期化 ---- */
+(async function init() {
+  try { state.records = await DB.all(); } catch (e) { state.records = []; }
+  regroup();
+  refreshCounts();
+  renderAll();
+  if ("serviceWorker" in navigator) { try { await navigator.serviceWorker.register("sw.js"); } catch (e) {} }
+})();
+
+/* テスト用フック */
+window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist };
+</script>
+</body>
+</html>

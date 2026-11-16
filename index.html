@@ -199,6 +199,14 @@ select,input[type=text],input[type=password]{font-size:1rem}
     </div>
     <div id="view-groups">
       <p class="help">似ている写真のグループです。一番良い1枚に👑、ほかは🗑️の印が自動で付いています。<b>写真を押すと印が切り替わります</b>。迷ったら「見比べる」で大きく比べてください。確認が終わったら一番下のボタンで④へ進みます。</p>
+      <div class="theme-row" style="justify-content:flex-start;margin:0 0 12px">
+        <label for="sens-sel">似た写真の判定</label>
+        <select id="sens-sel">
+          <option value="strict">厳しめ（そっくりな写真だけ）</option>
+          <option value="normal">ふつう</option>
+          <option value="wide">広め（同じ被写体の連写を拾う）</option>
+        </select>
+      </div>
       <div id="groups-list"></div>
     </div>
     <div id="view-swipe" hidden>
@@ -416,6 +424,10 @@ async function analyzeBlob(blob, meta) {
   }
   const n = aw * ah, mean = sum / n;
   const whitePct = white / n * 100, blackPct = black / n * 100;
+  /* 色の分布（4x4x4ヒストグラム）：構図がずれても同じ被写体を拾うための特徴 */
+  const histBins = new Array(64).fill(0);
+  for (let i = 0; i < px.length; i += 4) histBins[(px[i] >> 6) * 16 + (px[i + 1] >> 6) * 4 + (px[i + 2] >> 6)]++;
+  const hist = histBins.map(v => Math.round(v / n * 1000) / 1000);
   /* ピント：ラプラシアンの分散 */
   let lsum = 0, lsq = 0, ln = 0;
   for (let y = 1; y < ah - 1; y++) {
@@ -448,7 +460,7 @@ async function analyzeBlob(blob, meta) {
   tx.drawImage(bmp, 0, 0, tw, th);
   const thumb = await new Promise(res => tc.toBlob(res, "image/jpeg", 0.85));
   if (bmp.close) bmp.close();
-  return { w: W, h: H, thumb, hash, sharp: Math.round(sharpScore), expo: Math.round(expoScore), bright: Math.round(mean), whitePct: Math.round(whitePct * 10) / 10, blackPct: Math.round(blackPct * 10) / 10, score };
+  return { w: W, h: H, thumb, hash, hist, sharp: Math.round(sharpScore), expo: Math.round(expoScore), bright: Math.round(mean), whitePct: Math.round(whitePct * 10) / 10, blackPct: Math.round(blackPct * 10) / 10, score };
 }
 function hashDist(a, b) {
   let d = 0;
@@ -459,21 +471,54 @@ function hashDist(a, b) {
   }
   return d + Math.abs(a.length - b.length) * 4;
 }
+function colorSim(ha, hb) {
+  if (!ha || !hb) return 0;
+  let s = 0;
+  for (let i = 0; i < 64; i++) s += Math.min(ha[i] || 0, hb[i] || 0);
+  return s;
+}
 
-/* ---- 類似グループ化（union-find） ---- */
+/* ---- 類似グループ化（union-find・段階判定） ----
+   A: 見た目が非常に近い（時刻不問）
+   B: 見た目が近い＋時刻が近い
+   C: 見た目が中くらい＋色の分布が近い＋時刻が近い（構図がずれた連写向け）
+   AI: AIタグが2つ以上共通＋時刻が近い＋見た目が大きくは違わない */
+const SENS_LEVELS = {
+  strict: { a: 22, b: 34, bWin: 300000, c: 52, cSim: 0.94, cWin: 900000, ai: 64, aiWin: 1800000 },
+  normal: { a: 28, b: 46, bWin: 600000, c: 74, cSim: 0.90, cWin: 1800000, ai: 80, aiWin: 3600000 },
+  wide: { a: 36, b: 58, bWin: 900000, c: 88, cSim: 0.86, cWin: 3600000, ai: 96, aiWin: 7200000 },
+};
+function getSens() {
+  try { return SENS_LEVELS[localStorage.getItem("ph-sens")] || SENS_LEVELS.normal; } catch (e) { return SENS_LEVELS.normal; }
+}
+function similarPair(ra, rb, S) {
+  const d = hashDist(ra.hash, rb.hash);
+  if (d <= S.a) return true;
+  const dt = ra.ts && rb.ts ? Math.abs(ra.ts - rb.ts) : null;
+  if (dt === null) return false;
+  if (dt <= S.bWin && d <= S.b) return true;
+  if (dt <= S.cWin && d <= S.c && ra.hist && rb.hist && colorSim(ra.hist, rb.hist) >= S.cSim) return true;
+  if (dt <= S.aiWin && d <= S.ai && ra.ai && rb.ai) {
+    const shared = (ra.ai.tags || []).filter(t => (rb.ai.tags || []).includes(t)).length;
+    if (shared >= 2) return true;
+  }
+  return false;
+}
 function regroup() {
   const recs = state.records;
+  const S = getSens();
   const parent = recs.map((_, i) => i);
   const find = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
   const unite = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
-  const TH = 30, TW = 180000;
+  const maxWin = S.aiWin;
   const sorted = recs.map((r, i) => [r.ts || 0, i]).sort((a, b) => a[0] - b[0]);
   for (let a = 0; a < sorted.length; a++) {
-    for (let b = a + 1; b < sorted.length; b++) {
+    let compared = 0;
+    for (let b = a + 1; b < sorted.length && compared < 120; b++) {
       const dt = Math.abs(sorted[a][0] - sorted[b][0]);
-      if (sorted[a][0] && sorted[b][0] && dt > TW) break;
-      const ra = recs[sorted[a][1]], rb = recs[sorted[b][1]];
-      if (hashDist(ra.hash, rb.hash) <= TH) unite(sorted[a][1], sorted[b][1]);
+      if (sorted[a][0] && sorted[b][0] && dt > maxWin) break;
+      compared++;
+      if (similarPair(recs[sorted[a][1]], recs[sorted[b][1]], S)) unite(sorted[a][1], sorted[b][1]);
     }
   }
   const map = new Map();
@@ -512,14 +557,16 @@ async function importFiles(files, demoMode) {
     $("prog-text").textContent = "解析中 " + done + " / " + targets.length + " 枚（" + (f.name || "写真") + "）";
     try {
       const id = demoMode ? f.__demoId : (f.name + "|" + f.size + "|" + f.lastModified);
-      if (!demoMode && state.records.some(r => r.id === id)) continue;
       const exifTs = demoMode ? f.__demoTs : await readExifTime(f);
       const a = await analyzeBlob(f, {});
+      const prev = state.records.find(r => r.id === id);
       const rec = Object.assign({
         id, name: f.name || "写真", size: f.size || 0,
         ts: exifTs || f.lastModified || Date.now(),
         verdict: null, suggest: "keep", groupId: null, demo: !!demoMode,
       }, a);
+      /* 入れ直しのときは、付いていた判定とAI解析を引き継ぐ */
+      if (prev) { rec.verdict = prev.verdict; if (prev.ai) rec.ai = prev.ai; }
       await DB.put(rec);
       const ix = state.records.findIndex(r => r.id === id);
       if (ix >= 0) state.records[ix] = rec; else state.records.push(rec);
@@ -835,6 +882,8 @@ $("btn-sw-keep").addEventListener("click", () => swipeJudge("keep"));
 $("btn-sw-drop").addEventListener("click", () => swipeJudge("drop"));
 $("btn-cmp-close").addEventListener("click", () => $("cmp-modal").classList.remove("open"));
 $("btn-guide-close").addEventListener("click", () => { localStorage.setItem("phGuideSeen", "1"); $("guide3").hidden = true; $("btn-guide-open").hidden = false; });
+try { $("sens-sel").value = localStorage.getItem("ph-sens") || "normal"; } catch (e) {}
+$("sens-sel").addEventListener("change", () => { try { localStorage.setItem("ph-sens", $("sens-sel").value); } catch (e) {} regroup(); refreshCounts(); renderAll(); });
 $("btn-guide-open").addEventListener("click", () => { $("guide3").hidden = false; $("btn-guide-open").hidden = true; });
 $("btn-pick").addEventListener("click", () => $("file-pick").click());
 $("btn-folder").addEventListener("click", () => $("file-folder").click());
@@ -872,7 +921,7 @@ document.addEventListener("drop", e => e.preventDefault());
 })();
 
 /* テスト用フック */
-window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist };
+window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, similarPair, getSens };
 </script>
 <script>
 "use strict";

@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>写真発掘＆スマート断捨離</title>
-<meta name="theme-color" content="#1a1c22">
+<meta name="theme-color" id="meta-theme" content="#1a1c22">
+<script>
+(function(){try{var m=localStorage.getItem("ph-theme")||"dark";var r=m==="system"?(window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):m;document.documentElement.dataset.theme=r;document.documentElement.dataset.themeMode=m;if(r==="light")document.getElementById("meta-theme").setAttribute("content","#f3f1ea");}catch(e){document.documentElement.dataset.theme="dark";}})();
+</script>
 <meta property="og:type" content="website">
 <meta property="og:title" content="写真発掘＆スマート断捨離">
 <meta property="og:description" content="溜まった写真から、似た写真をまとめて一番良い1枚を残す。ピントと明るさで判定する写真整理PWA。AI連携（任意）で感情タグや表情の判定も。">
@@ -12,7 +15,12 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="favicon.png">
 <style>
-:root{--bg:#14151a;--panel:#1e2027;--panel2:#262932;--ink:#f2f1ec;--dim:#a7a9b3;--amber:#e8a33a;--red:#e5484d;--green:#46a758;--line:#3a3d47;--radius:16px}
+:root{--bg:#14151a;--panel:#1e2027;--panel2:#262932;--ink:#f2f1ec;--dim:#a7a9b3;--amber:#e8a33a;--red:#e5484d;--green:#46a758;--line:#3a3d47;--radius:16px;--field-bg:#101116}
+html[data-theme="light"]{--bg:#f3f1ea;--panel:#ffffff;--panel2:#efede5;--ink:#23242a;--dim:#63656f;--amber:#b97e22;--line:#d5d1c4;--field-bg:#ffffff}
+html[data-theme="light"] #err-list{color:#c62f35}
+.banner{width:100%;height:auto;border-radius:14px;border:1px solid var(--line);display:block;margin-top:12px}
+.theme-row{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px;font-size:.9rem;color:var(--dim)}
+.theme-row select{min-height:42px;border-radius:9px;border:1px solid var(--line);background:var(--field-bg);color:var(--ink);padding:4px 8px;font-size:.95rem}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:17px;line-height:1.65}
@@ -36,7 +44,7 @@ h2{font-size:1.18rem;margin:0 0 8px}
 #drop{border:2px dashed #565a68;border-radius:14px;padding:26px 12px;text-align:center;color:var(--dim);margin-top:12px;font-size:.95rem}
 #drop.over{border-color:var(--amber);color:var(--amber);background:rgba(232,163,58,.06)}
 .progress-wrap{margin-top:14px}
-.progress-bar{height:16px;background:#101116;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.progress-bar{height:16px;background:var(--field-bg);border-radius:8px;overflow:hidden;border:1px solid var(--line)}
 .progress-bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#b97e22,var(--amber));transition:width .25s}
 #prog-text{font-size:.92rem;color:var(--ink);margin-top:8px;text-align:center;min-height:1.4em}
 .counts{display:flex;gap:8px;margin-top:12px}
@@ -50,7 +58,7 @@ h2{font-size:1.18rem;margin:0 0 8px}
 .group h3{margin:0 0 4px;font-size:1rem}
 .group .gmeta{color:var(--dim);font-size:.8rem;margin-bottom:8px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
-.tile{position:relative;border:2px solid transparent;border-radius:10px;overflow:hidden;background:#101116;cursor:pointer;padding:0;text-align:left}
+.tile{position:relative;border:2px solid transparent;border-radius:10px;overflow:hidden;background:var(--field-bg);cursor:pointer;padding:0;text-align:left}
 .tile img{display:block;width:100%;height:88px;object-fit:cover}
 .tile .sc{position:absolute;left:5px;bottom:5px;background:rgba(0,0,0,.72);color:#ffd98a;font-size:.72rem;padding:1px 7px;border-radius:8px}
 .tile .bdg{position:absolute;right:5px;top:5px;font-size:.7rem;padding:2px 8px;border-radius:9px;font-weight:700}
@@ -65,11 +73,11 @@ h2{font-size:1.18rem;margin:0 0 8px}
 .modal .box{max-width:860px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
 .cmp-imgs{display:flex;gap:10px;flex-wrap:wrap}
 .cmp-imgs figure{flex:1;min-width:150px;margin:0;text-align:center}
-.cmp-imgs img{max-width:100%;border-radius:10px;background:#101116}
+.cmp-imgs img{max-width:100%;border-radius:10px;background:var(--field-bg)}
 .cmp-imgs figcaption{font-size:.8rem;color:var(--dim);margin-top:5px}
 .swipe-stage{position:relative;min-height:340px;display:flex;align-items:center;justify-content:center}
 .swipe-card{width:min(430px,92vw);background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:12px;text-align:center;touch-action:pan-y;user-select:none}
-.swipe-card img{max-width:100%;max-height:300px;border-radius:10px;background:#101116}
+.swipe-card img{max-width:100%;max-height:300px;border-radius:10px;background:var(--field-bg)}
 .swipe-btns{display:flex;gap:10px;margin-top:12px}
 .swipe-btns button{flex:1;min-height:58px;border-radius:12px;font-size:1.02rem;font-weight:700;cursor:pointer;border:1px solid var(--line);color:#fff}
 .btn-keep{background:linear-gradient(180deg,#2f6b3c,#245431)}
@@ -87,11 +95,11 @@ select,input[type=text],input[type=password]{font-size:1rem}
 .ai-bar .st{font-size:.9rem;color:var(--ink)}
 .field{margin-top:12px}
 .field label{display:block;font-size:.88rem;color:var(--dim);margin-bottom:4px}
-.field input,.field select{width:100%;min-height:50px;border-radius:10px;border:1px solid var(--line);background:#101116;color:var(--ink);padding:8px 10px}
+.field input,.field select{width:100%;min-height:50px;border-radius:10px;border:1px solid var(--line);background:var(--field-bg);color:var(--ink);padding:8px 10px}
 .album{margin-top:16px}
 .album h3{font-size:1.02rem;margin:0 0 6px}
 .search-row{display:flex;gap:8px;margin-top:4px}
-.search-row input{flex:1;min-height:52px;border-radius:10px;border:1px solid var(--line);background:#101116;color:var(--ink);padding:8px 10px;min-width:0}
+.search-row input{flex:1;min-height:52px;border-radius:10px;border:1px solid var(--line);background:var(--field-bg);color:var(--ink);padding:8px 10px;min-width:0}
 .search-row button{min-height:52px;padding:0 18px;border-radius:10px;border:1px solid var(--amber);background:linear-gradient(180deg,#5a451a,#42320f);color:#fff;font-weight:700;cursor:pointer}
 .ai-face{font-size:.72rem;color:#ffd98a}
 .help{background:rgba(232,163,58,.09);border-left:4px solid var(--amber);border-radius:0 10px 10px 0;padding:10px 12px;font-size:.93rem;line-height:1.75;margin:0 0 12px}
@@ -106,6 +114,15 @@ select,input[type=text],input[type=password]{font-size:1rem}
   <header class="top">
     <h1>写真<span class="accent">発掘</span>＆スマート断捨離</h1>
     <p>似た写真をまとめて、一番良い1枚を残すお手伝いをします</p>
+    <img class="banner" src="title-banner.gif" width="800" height="300" alt="写真がグループに分かれ、ベストの1枚に王冠が付き、アルバムに収まっていくアニメーション">
+    <div class="theme-row">
+      <label for="theme-sel">画面の色</label>
+      <select id="theme-sel">
+        <option value="dark">ダーク</option>
+        <option value="light">ライト</option>
+        <option value="system">システム（端末に合わせる）</option>
+      </select>
+    </div>
   </header>
 
   <nav class="steps" id="steps">
@@ -1150,8 +1167,23 @@ function moodSearch() {
 $("btn-mood").addEventListener("click", moodSearch);
 $("mood-q").addEventListener("keydown", e => { if (e.key === "Enter") moodSearch(); });
 
+/* ---- 配色（ダーク／ライト／システム） ---- */
+function applyTheme(mode) {
+  const resolved = mode === "system" ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : mode;
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.themeMode = mode;
+  $("meta-theme").setAttribute("content", resolved === "light" ? "#f3f1ea" : "#1a1c22");
+  try { localStorage.setItem("ph-theme", mode); } catch (e) {}
+  if ($("theme-sel")) $("theme-sel").value = mode;
+}
+$("theme-sel").value = document.documentElement.dataset.themeMode || "dark";
+$("theme-sel").addEventListener("change", () => applyTheme($("theme-sel").value));
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+  if (document.documentElement.dataset.themeMode === "system") applyTheme("system");
+});
+
 renderAiBar();
-window.__phAi = { aiLoad, aiSave, aiAnalyzeBatch, aiTest, runAi, renderAlbums, moodSearch, getSettings: () => aiSet, setSettings: s => { aiSet = s; aiSave(); } };
+window.__phAi = { aiLoad, aiSave, aiAnalyzeBatch, aiTest, runAi, renderAlbums, moodSearch, getSettings: () => aiSet, setSettings: s => { aiSet = s; aiSave(); }, applyTheme };
 </script>
 </body>
 </html>

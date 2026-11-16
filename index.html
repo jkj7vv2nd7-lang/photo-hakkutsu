@@ -251,7 +251,7 @@ select,input[type=text],input[type=password]{font-size:1rem}
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
   </section>
 
-  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v6</span></p>
+  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v7</span></p>
 </div>
 
 <!-- AI設定モーダル -->
@@ -498,9 +498,9 @@ function colorSimRec(ra, rb) {
    C: 見た目が中くらい＋色の分布が近い＋時刻が近い（構図がずれた連写向け）
    AI: AIタグが2つ以上共通＋時刻が近い＋見た目が大きくは違わない */
 const SENS_LEVELS = {
-  strict: { a: 22, b: 34, bWin: 300000, c: 52, cSim: 0.94, cWin: 900000, c2: 100, c2Sim: 0.95, c2Win: 900000, c3Sim: 0.97, c3Win: 300000, ai: 90, aiWin: 3600000 },
-  normal: { a: 28, b: 46, bWin: 600000, c: 74, cSim: 0.90, cWin: 1800000, c2: 120, c2Sim: 0.93, c2Win: 1800000, c3Sim: 0.96, c3Win: 600000, ai: 110, aiWin: 7200000 },
-  wide: { a: 36, b: 58, bWin: 900000, c: 88, cSim: 0.86, cWin: 3600000, c2: 140, c2Sim: 0.91, c2Win: 3600000, c3Sim: 0.945, c3Win: 1200000, ai: 130, aiWin: 10800000 },
+  strict: { a: 22, b: 34, bWin: 300000, c: 52, cSim: 0.94, cWin: 900000, c2: 100, c2Sim: 0.95, c2Win: 900000, c3Sim: 0.97, c3Win: 300000, ai: 90, aiWin: 3600000, seqGap: 10, seqSim2: 0.55, seqSim1: 0.82, seqSim0: 0.90 },
+  normal: { a: 28, b: 46, bWin: 600000, c: 74, cSim: 0.90, cWin: 1800000, c2: 120, c2Sim: 0.93, c2Win: 1800000, c3Sim: 0.96, c3Win: 600000, ai: 110, aiWin: 7200000, seqGap: 20, seqSim2: 0.45, seqSim1: 0.75, seqSim0: 0.85 },
+  wide: { a: 36, b: 58, bWin: 900000, c: 88, cSim: 0.86, cWin: 3600000, c2: 140, c2Sim: 0.91, c2Win: 3600000, c3Sim: 0.945, c3Win: 1200000, ai: 130, aiWin: 10800000, seqGap: 40, seqSim2: 0.40, seqSim1: 0.68, seqSim0: 0.80 },
 };
 function getSens() {
   try { return SENS_LEVELS[localStorage.getItem("ph-sens")] || SENS_LEVELS.normal; } catch (e) { return SENS_LEVELS.normal; }
@@ -533,10 +533,31 @@ function moodSim(ra, rb) {
   for (const g of A) if (B.has(g)) inter++;
   return inter / (A.size + B.size - inter);
 }
+/* ファイル名の連番（IMG_3952〜3976など）：同じ撮影セッションの強い信号 */
+function seqInfo(name) {
+  const base = String(name || "").replace(/\.[a-z0-9]+$/i, "");
+  const m = base.match(/^(.*?)(\d+)$/);
+  if (!m) return null;
+  return { prefix: m[1].toLowerCase(), num: parseInt(m[2], 10), digits: m[2].length };
+}
+function seqClose(ra, rb, S) {
+  const a = seqInfo(ra.name), b = seqInfo(rb.name);
+  if (!a || !b) return false;
+  return a.prefix === b.prefix && a.digits === b.digits && Math.abs(a.num - b.num) <= S.seqGap;
+}
 function similarPair(ra, rb, S) {
   const d = hashDist(ra.hash, rb.hash);
   const cs = colorSimRec(ra, rb);
   if (d <= S.a && (cs === null || cs >= 0.5)) return true;
+  /* 連番セッション段：連番＋色合い＋AIタグがそろえば、時刻・構図が離れていても同じ群れとみる */
+  if (seqClose(ra, rb, S)) {
+    const shared = ra.ai && rb.ai ? sharedTags(ra, rb) : 0;
+    if (cs !== null) {
+      if (shared >= 2 && cs >= S.seqSim2) return true;
+      if (shared >= 1 && cs >= S.seqSim1) return true;
+      if (cs >= S.seqSim0) return true;
+    } else if (shared >= 2 && d <= S.ai) return true;
+  }
   const dt = ra.ts && rb.ts ? Math.abs(ra.ts - rb.ts) : null;
   if (dt === null) return false;
   /* 色の分布が全く違うものは別場面として扱う（色データがある場合の安全弁） */
@@ -589,6 +610,17 @@ function regroup() {
       if (sorted[a][0] && sorted[b][0] && dt > maxWin) break;
       compared++;
       if (similarPair(recs[sorted[a][1]], recs[sorted[b][1]], S)) unite(sorted[a][1], sorted[b][1]);
+    }
+  }
+  /* 連番の段は時刻に縛られないので、番号順にも走査する */
+  const bySeq = recs.map((r, i) => [seqInfo(r.name), i]).filter(x => x[0])
+    .sort((a, b) => a[0].prefix === b[0].prefix ? a[0].num - b[0].num : (a[0].prefix < b[0].prefix ? -1 : 1));
+  for (let a = 0; a < bySeq.length; a++) {
+    for (let b = a + 1; b < bySeq.length; b++) {
+      const ia = bySeq[a][0], ib = bySeq[b][0];
+      if (ia.prefix !== ib.prefix || ia.digits !== ib.digits) break;
+      if (ib.num - ia.num > S.seqGap) break;
+      if (similarPair(recs[bySeq[a][1]], recs[bySeq[b][1]], S)) unite(bySeq[a][1], bySeq[b][1]);
     }
   }
   const map = new Map();
@@ -1015,7 +1047,7 @@ document.addEventListener("drop", e => e.preventDefault());
 })();
 
 /* テスト用フック */
-window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, colorSimRec, similarPair, getSens, sharedTags, moodSim, diagnose };
+window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, colorSimRec, similarPair, getSens, sharedTags, moodSim, diagnose, seqInfo, seqClose };
 </script>
 <script>
 "use strict";

@@ -42,6 +42,15 @@ h2{font-size:1.18rem;margin:0 0 8px}
 .ghost-btn{display:block;width:100%;min-height:52px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-size:.98rem;cursor:pointer;margin-top:10px}
 .danger-btn{border-color:#b0503f;color:#d97b6f}
 html[data-theme="light"] .danger-btn{border-color:#b03a2a;color:#b03a2a}
+#print-guide{display:none}
+@media print{
+  body>*:not(#print-guide){display:none !important}
+  #print-guide{display:block !important;color:#000;font-family:sans-serif}
+  #print-guide h1{font-size:18px;margin:0 0 6px}
+  #print-guide .pg-row{display:flex;gap:10px;align-items:center;border-bottom:1px solid #999;padding:6px 0;font-size:13px}
+  #print-guide .pg-box{font-size:16px}
+  #print-guide img{width:44px;height:44px;object-fit:cover}
+}
 .big-btn:active,.ghost-btn:active{transform:translateY(1px)}
 #drop{border:2px dashed #565a68;border-radius:14px;padding:26px 12px;text-align:center;color:var(--dim);margin-top:12px;font-size:.95rem}
 #drop.over{border-color:var(--amber);color:var(--amber);background:rgba(232,163,58,.06)}
@@ -249,14 +258,22 @@ select,input[type=text],input[type=password]{font-size:1rem}
       <div class="c"><b id="cnt-keep4">0</b><span>残す</span></div>
       <div class="c"><b id="cnt-drop4">0</b><span>削除候補</span></div>
     </div>
-    <h3 style="margin:16px 0 4px;font-size:1.02rem">お掃除ガイド（削除候補の一覧）</h3>
+    <h3 style="margin:16px 0 4px;font-size:1.02rem">残す写真の書き出し（ZIP）</h3>
+    <p class="note">元の写真は保存していないため、書き出せるのは<b>今の回で読み込んだ写真だけ</b>です。アプリを開き直した後は書き出せませんので、必要な写真は同じ回の中で書き出してください。</p>
+    <p class="note" id="zip-status"></p>
+    <button type="button" class="big-btn" id="btn-zip">残す写真をZIPで書き出す</button>
+    <div id="export-result"></div>
+    <h3 style="margin:20px 0 4px;font-size:1.02rem">お掃除ガイド（削除候補の一覧）</h3>
     <p class="note">この一覧を見ながら、iCloud写真やGoogleフォトで同じ写真を探して削除できます。<b style="color:#ffd98a">このアプリが写真そのものを消すことは決してありません</b>（ブラウザからは元の写真を直接消せません）。「削除候補」は印だけで、実際の削除はこのガイドを見ながらご自身で行います。</p>
     <div id="check-list"></div>
-    <p class="note" style="margin-top:14px">「残す」写真のZIP書き出しと、このガイドのCSV・印刷は第3期で入ります。</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button type="button" class="ghost-btn" id="btn-csv" style="flex:1">削除候補リストをCSVで出す</button>
+      <button type="button" class="ghost-btn" id="btn-print" style="flex:1">お掃除ガイドを印刷する</button>
+    </div>
     <button type="button" class="ghost-btn" id="btn-back3">③ 整理に戻る</button>
   </section>
 
-  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v9</span></p>
+  <p class="foot">写真は端末の中でだけ処理します。AI連携を使う場合だけ、解析用の小さな画像が、設定したAIサービスへ送られます。<br>不具合が出るかもしれません。実際にご使用の際に不具合がありましたらコメント欄からお知らせください。<br>写真発掘＆スマート断捨離 <span id="app-ver">版数 v10</span></p>
 </div>
 
 <!-- AI設定モーダル -->
@@ -315,7 +332,7 @@ select,input[type=text],input[type=password]{font-size:1rem}
 "use strict";
 /* ================= 基盤：状態・保存・解析 ================= */
 const $ = id => document.getElementById(id);
-const state = { records: [], groups: new Map(), cancel: false, busy: false };
+const state = { records: [], groups: new Map(), cancel: false, busy: false, files: new Map() };
 const effVerdict = r => r.verdict || r.suggest || "keep";
 const effScore = r => (r.ai && typeof r.ai.total === "number") ? r.ai.total : r.score;
 const isDemoId = id => String(id).startsWith("demo-");
@@ -677,6 +694,7 @@ async function importFiles(files, demoMode) {
       await DB.put(rec);
       const ix = state.records.findIndex(r => r.id === id);
       if (ix >= 0) state.records[ix] = rec; else state.records.push(rec);
+      state.files.set(id, f); /* ZIP書き出し用に、この回で読み込んだ元ファイルを保持する */
     } catch (e) {
       errors.push("・" + (f.name || "写真") + "：この形式は開けませんでした（HEIC等はSafariで開ける場合があります）");
     }
@@ -792,17 +810,141 @@ function renderChecklist() {
   const wrap = $("check-list");
   wrap.innerHTML = "";
   const drops = state.records.filter(r => effVerdict(r) === "drop").sort((a, b) => (a.ts || 0) - (b.ts || 0));
-  if (!drops.length) { wrap.innerHTML = '<p class="note">削除候補はまだありません。</p>'; return; }
+  if (!drops.length) { wrap.innerHTML = '<p class="note">削除候補はまだありません。</p>'; }
   for (const r of drops) {
     const d = document.createElement("div");
     d.className = "check-item";
     d.innerHTML = "<img alt=''><div><div class='ci-nm'></div><div class='ci-dt'></div></div>";
     d.querySelector("img").src = thumbUrl(r);
     d.querySelector(".ci-nm").textContent = r.name;
-    d.querySelector(".ci-dt").textContent = fmtDate(r.ts) + " ・ 画質スコア " + r.score;
+    d.querySelector(".ci-dt").textContent = fmtDate(r.ts) + " ・ " + (r.ai ? "AI " + r.ai.total : "画質スコア " + r.score);
     wrap.appendChild(d);
   }
+  renderExportStatus();
+  renderPrintGuide(drops);
 }
+
+/* ---- 第3期：ZIP書き出し・CSV・印刷 ---- */
+const CRC_TABLE = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function buildZipBlob(entries) {
+  const enc = new TextEncoder();
+  const chunks = [], central = [], used = new Set();
+  let offset = 0;
+  for (const e of entries) {
+    let name = e.name || "photo.jpg";
+    if (used.has(name)) {
+      const dot = name.lastIndexOf(".");
+      const base = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : "";
+      let i = 2;
+      while (used.has(base + " (" + i + ")" + ext)) i++;
+      name = base + " (" + i + ")" + ext;
+    }
+    used.add(name);
+    const nameBytes = enc.encode(name);
+    const data = new Uint8Array(await e.blob.arrayBuffer());
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+    local.setUint16(8, 0, true); local.setUint16(10, 0, true); local.setUint16(12, 0x21, true);
+    local.setUint32(14, crc, true); local.setUint32(18, data.length, true); local.setUint32(22, data.length, true);
+    local.setUint16(26, nameBytes.length, true); local.setUint16(28, 0, true);
+    chunks.push(new Uint8Array(local.buffer), nameBytes, data);
+    const cen = new DataView(new ArrayBuffer(46));
+    cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true); cen.setUint16(8, 0x0800, true);
+    cen.setUint16(10, 0, true); cen.setUint16(12, 0, true); cen.setUint16(14, 0x21, true);
+    cen.setUint32(16, crc, true); cen.setUint32(20, data.length, true); cen.setUint32(24, data.length, true);
+    cen.setUint16(28, nameBytes.length, true);
+    cen.setUint32(42, offset, true);
+    central.push(new Uint8Array(cen.buffer), nameBytes);
+    offset += 30 + nameBytes.length + data.length;
+  }
+  const cenStart = offset;
+  let cenSize = 0;
+  for (const c of central) cenSize += c.length;
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, cenSize, true); end.setUint32(16, cenStart, true);
+  chunks.push.apply(chunks, central);
+  chunks.push(new Uint8Array(end.buffer));
+  return new Blob(chunks, { type: "application/zip" });
+}
+function keepsList() { return state.records.filter(r => effVerdict(r) === "keep"); }
+function renderExportStatus() {
+  const el = $("zip-status");
+  if (!el) return;
+  const keeps = keepsList();
+  const avail = keeps.filter(r => state.files.has(r.id)).length;
+  if (!keeps.length) { el.textContent = "「残す」写真がまだありません。"; return; }
+  el.textContent = "残す写真 " + keeps.length + " 枚のうち、今の回で読み込んだ " + avail + " 枚が書き出せます。" + (avail < keeps.length ? "（残り " + (keeps.length - avail) + " 枚は、開き直す前に読み込んだ分なので書き出せません）" : "");
+}
+function showExportResult(blob, filename, label) {
+  const wrap = $("export-result");
+  wrap.innerHTML = "";
+  const url = URL.createObjectURL(blob);
+  const p = document.createElement("p");
+  p.className = "note";
+  p.textContent = label + "：" + filename + "（" + Math.max(1, Math.round(blob.size / 1024)) + " KB）";
+  wrap.appendChild(p);
+  const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "big-btn"; b.textContent = "共有して保存する";
+    b.addEventListener("click", async () => { try { await navigator.share({ files: [file] }); } catch (e) {} });
+    wrap.appendChild(b);
+  }
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.className = "ghost-btn"; a.style.textAlign = "center"; a.style.textDecoration = "none";
+  a.textContent = "ダウンロードする";
+  wrap.appendChild(a);
+}
+$("btn-zip").addEventListener("click", async () => {
+  const avail = keepsList().filter(r => state.files.has(r.id));
+  if (!avail.length) { alert("今の回で読み込んだ「残す」写真がありません。写真を読み込んだ同じ回の中で書き出してください。"); return; }
+  const btn = $("btn-zip");
+  btn.disabled = true; btn.textContent = "ZIPを作成しています…";
+  try {
+    const blob = await buildZipBlob(avail.map(r => ({ name: r.name, blob: state.files.get(r.id) })));
+    const d = new Date();
+    const ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+    showExportResult(blob, "残す写真-" + ymd + ".zip", "残す写真 " + avail.length + " 枚のZIP");
+  } catch (e) {
+    alert("ZIPの作成に失敗しました：" + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "残す写真をZIPで書き出す";
+  }
+});
+function csvText() {
+  const drops = state.records.filter(r => effVerdict(r) === "drop").sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+  const lines = [["ファイル名", "撮影日時", "スコア", "種別"].join(",")];
+  for (const r of drops) {
+    const kind = r.verdict === "drop" ? "手動で候補" : (r.groupId ? "グループの候補" : "候補");
+    lines.push([q(r.name), q(fmtDate(r.ts)), q(r.ai ? "AI " + r.ai.total : "画質 " + r.score), q(kind)].join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n");
+}
+$("btn-csv").addEventListener("click", () => {
+  const drops = state.records.filter(r => effVerdict(r) === "drop");
+  if (!drops.length) { alert("削除候補がまだありません。"); return; }
+  const blob = new Blob([csvText()], { type: "text/csv" });
+  showExportResult(blob, "削除候補リスト.csv", "削除候補 " + drops.length + " 件のCSV");
+});
+function renderPrintGuide(drops) {
+  const pg = $("print-guide");
+  if (!pg) return;
+  let html = "<h1>お掃除ガイド（削除候補 " + drops.length + " 件）</h1><p>写真発掘＆スマート断捨離 ― " + fmtDate(Date.now()) + " 作成。この一覧を見ながら、iCloud写真やGoogleフォトで同じ写真を探して削除してください。消したら左の□にチェックを。</p>";
+  for (const r of drops) {
+    html += '<div class="pg-row"><span class="pg-box">☐</span><img src="' + r.thumb + '" alt=""><span>' + r.name.replace(/</g, "&lt;") + "</span><span>" + fmtDate(r.ts) + "</span><span>" + (r.ai ? "AI " + r.ai.total : "画質 " + r.score) + "</span></div>";
+  }
+  pg.innerHTML = html;
+}
+$("btn-print").addEventListener("click", () => {
+  const drops = state.records.filter(r => effVerdict(r) === "drop");
+  if (!drops.length) { alert("削除候補がまだありません。"); return; }
+  renderPrintGuide(drops.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)));
+  window.print();
+});
 function renderAll() {
   renderGroups(); renderGridAll(); renderChecklist(); renderSwipe();
   if (window.__phAi) window.__phAi.renderAlbums();
@@ -1003,7 +1145,7 @@ $("btn-reset").addEventListener("click", async () => {
   if (!state.records.length) { alert("まだ写真が入っていません。"); return; }
   if (!confirm("読み込んだ写真のデータ（" + state.records.length + "枚分）を全部消しますか？\n小さな画像・判定・AI解析結果が消え、0枚に戻ります。\nAI連携の設定とキーは残ります。写真そのものには何もしません。")) return;
   await DB.clear();
-  state.records = []; state.groups = new Map(); state.compareSet = []; state.swipeQueue = [];
+  state.records = []; state.groups = new Map(); state.compareSet = []; state.swipeQueue = []; state.files.clear();
   for (const u of thumbUrls.values()) URL.revokeObjectURL(u);
   thumbUrls.clear();
   $("err-list").textContent = "";
@@ -1056,7 +1198,7 @@ document.addEventListener("drop", e => e.preventDefault());
 })();
 
 /* テスト用フック */
-window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, colorSimRec, similarPair, getSens, sharedTags, moodSim, diagnose, seqInfo, seqClose };
+window.__ph = { state, DB, regroup, effVerdict, importFiles, loadDemo, hashDist, colorSim, colorSimRec, similarPair, getSens, sharedTags, moodSim, diagnose, seqInfo, seqClose, buildZipBlob, csvText, keepsList, renderChecklist };
 </script>
 <script>
 "use strict";
@@ -1395,5 +1537,6 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ()
 renderAiBar();
 window.__phAi = { aiLoad, aiSave, aiAnalyzeBatch, aiTest, runAi, renderAlbums, moodSearch, getSettings: () => aiSet, setSettings: s => { aiSet = s; aiSave(); }, applyTheme, aiBatchWithRetry, setRetryDelays: d => { retryDelays = d; } };
 </script>
+<div id="print-guide"></div>
 </body>
 </html>
